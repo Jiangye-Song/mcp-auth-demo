@@ -35,6 +35,7 @@ This project successfully implements:
    GOOGLE_CLIENT_ID=228760319328-g2tmjubea6q0ftpuuab6p23647eht53.apps.googleusercontent.com
    GOOGLE_CLIENT_SECRET=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
    ```
+   Note: this GOOGLE_CLIENT_SECRET is already deleted from the Google Console.
 
 3. **Start development server**:
    ```bash
