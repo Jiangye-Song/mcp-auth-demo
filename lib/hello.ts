@@ -1,28 +1,45 @@
-import { z } from "zod"
+import { z } from "zod";
+import { formatUserInfo } from "./auth";
 
-// Shared Zod schema for hello message validation
-export const helloSchema = z.string().optional().default("World")
+// Zod schema for hello message validation
+export const helloSchema = {
+  name: z.string().optional().default("World").describe("The name of the person to greet"),
+};
 
-// Shared hello logic used by both MCP handler and server actions
-export function sayHello(name?: string) {
-  // Validate input using the shared schema
-  const validatedName = helloSchema.parse(name)
+// Enhanced hello function with authentication support
+export function sayHello(
+  { name }: { name?: string },
+  extra?: { authInfo?: any }
+) {
+  // Validate and get the name
+  const validatedName = name || "World";
 
-  // Generate hello message
-  const message = `👋 Hello, ${validatedName}! This is a simple MCP tool saying hi!`
+  // Basic greeting
+  const greeting = `👋 Hello, ${validatedName}!`;
 
-  // Return standardized result format
+  // Add authentication info if available
+  const authInfo = extra?.authInfo;
+  const userInfo = formatUserInfo(authInfo);
+
+  // Generate message with auth context
+  const message = authInfo
+    ? `${greeting}${userInfo} This is an authenticated MCP tool!`
+    : `${greeting} This is a public MCP tool!`;
+
+  // Return MCP-compatible result format
   return {
-    type: 'text' as const,
-    text: message
-  }
+    content: [
+      {
+        type: "text" as const,
+        text: message
+      }
+    ],
+  };
 }
 
-// Tool definition that can be reused
+// Tool definition for MCP handler
 export const helloTool = {
   name: 'say_hello',
-  description: 'Says hello to someone with a friendly greeting',
-  schema: {
-    name: helloSchema,
-  }
-} as const
+  description: 'Says hello to someone with authentication info',
+  inputSchema: helloSchema,
+} as const;

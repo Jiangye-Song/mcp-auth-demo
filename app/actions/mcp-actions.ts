@@ -5,13 +5,12 @@ import { sayHello as sayHelloCore, helloTool } from "@/lib/hello"
 // Server action that uses the shared hello logic
 export async function sayHello(name?: string) {
   try {
-    const result = sayHelloCore(name)
+    // Call the core function with the new signature
+    const result = sayHelloCore({ name })
 
     return {
       success: true,
-      result: {
-        content: [result]
-      }
+      result
     }
   } catch (error) {
     return {

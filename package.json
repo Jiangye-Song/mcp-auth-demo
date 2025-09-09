@@ -11,6 +11,10 @@
     "test:mcp": "curl -X POST http://localhost:3000/api/mcp -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}'"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "@types/jsonwebtoken": "^9.0.10",
+    "google-auth-library": "^10.3.0",
+    "jsonwebtoken": "^9.0.2",
     "mcp-handler": "^1.0.0",
     "next": "15.5.2",
     "react": "19.1.0",

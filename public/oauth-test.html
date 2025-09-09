@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Google OAuth Test for MCP</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+
+<body>
+    <h1>Google OAuth Test for MCP Authentication</h1>
+
+    <div>
+        <p>Click the button below to sign in with Google and get an ID token:</p>
+        <div id="g_id_onload" data-client_id="228760319328-g2tmjubea6q0ftpuuuab6p23647eht53.apps.googleusercontent.com"
+            data-callback="handleCredentialResponse">
+        </div>
+        <div class="g_id_signin" data-type="standard"></div>
+    </div>
+
+    <div id="tokenInfo" style="margin-top: 20px; display: none;">
+        <h3>ID Token:</h3>
+        <textarea id="idToken" style="width: 100%; height: 100px;" readonly></textarea>
+        <br><br>
+        <button onclick="testMcpCall()">Test MCP Call with Token</button>
+        <div id="mcpResult" style="margin-top: 10px;"></div>
+    </div>
+
+    <script>
+        let currentToken = null;
+
+        function handleCredentialResponse(response) {
+            console.log("Encoded JWT ID token: " + response.credential);
+            currentToken = response.credential;
+
+            // Show the token
+            document.getElementById('idToken').value = response.credential;
+            document.getElementById('tokenInfo').style.display = 'block';
+
+            // Decode and display token info
+            const payload = JSON.parse(atob(response.credential.split('.')[1]));
+            console.log('Token payload:', payload);
+        }
+
+        async function testMcpCall() {
+            if (!currentToken) {
+                alert('Please sign in first');
+                return;
+            }
+
+            const resultDiv = document.getElementById('mcpResult');
+            resultDiv.innerHTML = 'Testing MCP call...';
+
+            try {
+                const response = await fetch('/api/mcp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'tools/call',
+                        id: 1,
+                        params: {
+                            name: 'say_hello',
+                            arguments: {
+                                name: 'Test User'
+                            }
+                        }
+                    })
+                });
+
+                const result = await response.json();
+                resultDiv.innerHTML = `<h4>MCP Response:</h4><pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<h4>Error:</h4><pre>${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+
+</html>

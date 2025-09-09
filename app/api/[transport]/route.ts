@@ -1,30 +1,38 @@
 // app/api/[transport]/route.ts
-import { createMcpHandler } from "mcp-handler";
+import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { sayHello, helloTool } from "@/lib/hello";
+import { verifyGoogleToken } from "@/lib/auth";
 
+// Create the base MCP handler
 const handler = createMcpHandler(
   (server) => {
-    server.tool(
-      helloTool.name,
-      helloTool.description,
-      helloTool.schema,
-      async ({ name }) => {
-        // Use the shared hello logic
-        const result = sayHello(name);
-        return {
-          content: [result],
-        };
-      }
-    );
+    server.tool(helloTool.name, helloTool.description, helloTool.inputSchema, sayHello);
   },
   {
-    // Optional server options
+    serverInfo: {
+      name: "mcp-auth-demo",
+      version: "1.0.0",
+    },
+    // Add auth capability announcement
+    capabilities: {
+      auth: {
+        type: "bearer",
+        required: true,
+      },
+    },
   },
   {
-    // No Redis config - disable Redis requirement
-    basePath: "/api", // this needs to match where the [transport] is located.
+    basePath: "/api",
     maxDuration: 60,
     verboseLogs: true,
   }
 );
-export { handler as GET, handler as POST };
+
+// Wrap with Google OAuth authentication
+const authHandler = withMcpAuth(handler, verifyGoogleToken, {
+  required: true, // Make authentication mandatory
+  requiredScopes: ['read:mcp'], // Require specific scopes
+  resourceMetadataPath: "/.well-known/oauth-protected-resource",
+});
+
+export { authHandler as GET, authHandler as POST };

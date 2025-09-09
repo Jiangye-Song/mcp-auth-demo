@@ -1,292 +1,167 @@
-# MCP Auth Demo
+# MCP Hello Demo with Google OAuth
 
-A Next.js 15 application demonstrating Model Context Protocol (MCP) server implementation with Clerk OAuth authentication. This project serves as a reference for building authenticated MCP servers that can be consumed by AI assistants like Claude.
+A Model Context Protocol (MCP) server built with **Next.js 15** and **mcp-handler**, featuring **Google OAuth 2.0 authentication**.
 
-## Architecture Stack
+## 🎯 Status: WORKING ✅
 
-### Core Technologies
-- **Next.js 15**: App Router with Turbopack
-- **TypeScript**: Type-safe development
-- **React 19**: Modern React with concurrent features
-- **Tailwind CSS 4**: Utility-first styling
-- **Biome**: Code formatting and linting
+This project successfully implements:
+- ✅ **Google OAuth Authentication** - Full OAuth 2.0 flow with dual token support
+- ✅ **VS Code MCP Integration** - Seamless authentication with VS Code
+- ✅ **RFC 9728 Compliance** - OAuth Protected Resource Metadata standard
+- ✅ **Dual Token Verification** - Handles both Google ID tokens and access tokens
 
-### Authentication & MCP
-- **Clerk**: OAuth authentication provider (Google OAuth configured)
-- **@clerk/nextjs**: Clerk's Next.js integration
-- **@clerk/mcp-tools**: Clerk-specific MCP authentication helpers
-- **@vercel/mcp-adapter**: MCP protocol handler with auth wrappers
-- **Zod**: Runtime type validation for MCP tools
+## 🔧 The Key Breakthrough
 
-## Project Structure
+**Problem**: VS Code was sending Google **access tokens** instead of **ID tokens**.
 
-```
-├── app/
-│   ├── api/
-│   │   └── [transport]/
-│   │       └── route.ts              # Main authenticated MCP endpoint
-│   ├── .well-known/
-│   │   ├── oauth-authorization-server/
-│   │   │   └── route.ts              # OAuth server metadata
-│   │   └── oauth-protected-resource/
-│   │       └── mcp/
-│   │           └── route.ts          # OAuth resource metadata
-│   ├── layout.tsx                    # Root layout with ClerkProvider
-│   ├── page.tsx                      # Web interface for testing
-│   └── globals.css                   # Global styles
-├── lib/
-│   └── hello.ts                      # MCP tool implementation
-├── middleware.ts                     # Clerk authentication middleware
-├── package.json                      # Dependencies and scripts
-└── agents.md                         # Agent instructions
-```
+**Solution**: Implemented **dual token verification** that automatically detects and handles both token types:
+- **Google ID Tokens** (JWTs) → Verified with `google-auth-library`
+- **Google Access Tokens** → Verified with Google UserInfo API
 
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
+- Node.js 18+
+- Google Cloud Console project with OAuth 2.0 credentials
 
-1. **Node.js 18+** and **pnpm** installed
-2. **Clerk Account** with Google OAuth configured
-3. **Environment Variables** configured (see below)
+### Setup
+1. **Install dependencies**:
+   ```bash
+   pnpm install
+   ```
 
-### Environment Setup
+2. **Configure Google OAuth** (`.env.local`):
+   ```env
+   GOOGLE_CLIENT_ID=228760319328-g2tmjubea6q0ftpuuab6p23647eht53.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=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
+   ```
 
-Create a `.env.local` file with the following variables:
+3. **Start development server**:
+   ```bash
+   pnpm dev
+   ```
 
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_key_here
-CLERK_SECRET_KEY=sk_test_your_secret_here
-```
+### VS Code Integration
+1. **Configure MCP** (`.vscode/mcp.json`):
+   ```json
+   {
+     "servers": {
+       "hello-mcp": {
+         "type": "http",
+         "url": "http://localhost:3000/api/mcp"
+       }
+     }
+   }
+   ```
 
-### Installation
+2. **Restart VS Code** - MCP server will auto-start with OAuth authentication
 
-```bash
-# Install dependencies
-pnpm install
+## 🏗️ Architecture
 
-# Start development server
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) to see the application.
-
-### Clerk Dashboard Configuration
-
-1. **Enable Google OAuth Provider**:
-   - Go to your Clerk Dashboard
-   - Navigate to "User & Authentication" > "Social Connections"
-   - Enable Google and configure with your OAuth credentials
-
-2. **Configure OAuth Settings**:
-   - Add `http://localhost:3000` to allowed origins
-   - Set up redirect URLs for development and production
-
-## Key Components
-
-### 1. MCP Server (`app/api/[transport]/route.ts`)
-
-The main authenticated MCP endpoint that handles tool calls:
-
-- **Authentication**: Uses `experimental_withMcpAuth` wrapper
-- **Token Verification**: Implements `verifyClerkToken` for OAuth validation
-- **User Data**: Extracts authenticated user information from Clerk
-- **Protocol**: Supports both GET and POST requests for MCP JSON-RPC
-
-### 2. OAuth Metadata Endpoints
-
-**Authorization Server** (`/.well-known/oauth-authorization-server`):
-- Provides OAuth server discovery metadata
-- Follows RFC 8414 standards
-
-**Protected Resource** (`/.well-known/oauth-protected-resource/mcp`):
-- Defines scopes and authentication requirements
-- Follows RFC 8707 standards
-
-### 3. Authentication Middleware (`middleware.ts`)
-
-- **Route Protection**: Secures `/api/mcp` and `/api/sse` routes
-- **Clerk Integration**: Uses `clerkMiddleware` and `createRouteMatcher`
-- **Selective Protection**: Only protects API routes
-
-### 4. MCP Tool Implementation (`lib/hello.ts`)
-
-- **Tool Definition**: Reusable `helloTool` configuration
-- **Schema Validation**: Zod-based input validation
-- **Authentication Aware**: Supports authenticated users
-- **Standardized Output**: Consistent response format
-
-## Adding New MCP Tools
-
-### 1. Create Tool Logic (`lib/your-tool.ts`)
-
-```typescript
-import { z } from "zod"
-
-export const yourToolSchema = z.object({
-  // Define your parameters
-  message: z.string().optional()
-})
-
-export function yourToolFunction(params: z.infer<typeof yourToolSchema>) {
-  // Implement your tool logic
-  return { type: 'text', text: `Processed: ${params.message}` }
-}
-
-export const yourTool = {
-  name: 'your_tool',
-  description: 'Tool description',
-  schema: yourToolSchema,
-} as const
-```
-
-### 2. Register Tool (in `app/api/[transport]/route.ts`)
-
-```typescript
-import { yourTool, yourToolFunction } from '@/lib/your-tool'
-
-// Add to the handler
-server.tool(
-  yourTool.name,
-  yourTool.description,
-  yourTool.schema,
-  async (params, { authInfo }) => {
-    const userId = authInfo!.extra!.userId! as string
-    const userData = await clerk.users.getUser(userId)
-    
-    const result = yourToolFunction(params)
-    return {
-      content: [{ type: 'text', text: result.text }],
-    }
-  },
-)
-```
-
-## Testing
-
-### Web Interface Testing
-
-1. Visit `http://localhost:3000`
-2. Sign in with Google OAuth
-3. Use "Test MCP Auth" button to verify authentication
-4. Check that personalized greetings appear
-
-### Direct MCP Protocol Testing
-
-```bash
-# Test tools list
-curl -X POST http://localhost:3000/api/[transport] \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_OAUTH_TOKEN" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
-
-# Test tool call
-curl -X POST http://localhost:3000/api/[transport] \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_OAUTH_TOKEN" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"say_hello","arguments":{}},"id":1}'
-```
-
-### Claude Desktop Integration
-
-1. Configure OAuth in Claude Desktop settings
-2. Use discovery endpoints for automatic configuration:
-   - Authorization Server: `http://localhost:3000/.well-known/oauth-authorization-server`
-   - Protected Resource: `http://localhost:3000/.well-known/oauth-protected-resource/mcp`
-3. Test with natural language commands
-
-## Security Considerations
+### Core Components
+- **`app/api/[transport]/route.ts`** - Main MCP endpoint with OAuth authentication
+- **`lib/auth.ts`** - Dual token verification (ID tokens + access tokens)
+- **`app/.well-known/oauth-protected-resource/route.ts`** - RFC 9728 metadata endpoint
+- **`lib/hello.ts`** - Authenticated MCP tool implementation
 
 ### Authentication Flow
+1. **OAuth Metadata Discovery** - VS Code fetches `/.well-known/oauth-protected-resource`
+2. **Google OAuth** - User authenticates via Google OAuth 2.0
+3. **Token Verification** - Server verifies both ID tokens and access tokens
+4. **Authenticated MCP Calls** - Tools execute with user context
 
-1. **OAuth Token Validation**: All MCP requests must include valid OAuth tokens
-2. **User Context**: Tools receive authenticated user information
-3. **Route Protection**: Middleware enforces authentication on API routes
-4. **CORS Handling**: Proper CORS configuration for OAuth metadata endpoints
+## 🛠️ Available Tools
 
-### Best Practices
+### `say_hello`
+Greets users with authentication context.
 
-- **Token Expiration**: Handle token refresh in long-running sessions
-- **Error Handling**: Graceful degradation for authentication failures
-- **Logging**: Implement proper logging for authentication events
-- **Rate Limiting**: Consider implementing rate limiting for MCP endpoints
-
-## Deployment
-
-### Environment Configuration
-
-1. Set production environment variables in your hosting platform
-2. Configure Clerk production instance
-3. Update OAuth redirect URLs for production domain
-
-### Performance Optimization
-
-- Enable Turbopack for faster builds
-- Implement proper caching strategies
-- Consider CDN for static assets
-
-### Monitoring
-
-- Set up error tracking (Sentry, etc.)
-- Monitor authentication success/failure rates
-- Track MCP tool usage analytics
-
-## Common Issues & Solutions
-
-### Authentication Issues
-
-- **Token Validation Errors**: Check Clerk configuration and environment variables
-- **CORS Errors**: Verify OAuth metadata endpoint configurations
-- **Middleware Conflicts**: Ensure proper route matching in middleware
-
-### MCP Protocol Issues
-
-- **Tool Not Found**: Verify tool registration in route handler
-- **Schema Validation**: Check Zod schema definitions and parameter types
-- **Response Format**: Ensure proper MCP response structure
-
-### Development Issues
-
-- **Hot Reload**: Use Turbopack for faster development iteration
-- **Type Errors**: Keep TypeScript strict mode enabled
-- **Linting**: Use Biome for consistent code formatting
-
-## Available Scripts
-
-```bash
-# Development
-pnpm dev          # Start development server with Turbopack
-
-# Production
-pnpm build        # Build for production
-pnpm start        # Start production server
-
-# Code Quality
-pnpm lint         # Run Biome linter
-pnpm format       # Format code with Biome
-
-# Testing
-pnpm test:mcp     # Test MCP endpoint with curl
+**Usage**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "id": 1,
+  "params": {
+    "name": "say_hello",
+    "arguments": { "name": "World" }
+  }
+}
 ```
 
-## Resources
+**Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "👋 Hello, World! (authenticated as user@gmail.com) This is an authenticated MCP tool!"
+    }]
+  }
+}
+```
 
-- [Clerk Documentation](https://clerk.com/docs)
-- [MCP Protocol Specification](https://modelcontextprotocol.org/)
-- [Next.js 15 Documentation](https://nextjs.org/docs)
-- [Vercel MCP Adapter](https://github.com/vercel/ai/tree/main/packages/mcp-adapter)
-- [OAuth 2.0 RFC](https://tools.ietf.org/html/rfc6749)
+## 📚 Technical Details
 
-## Contributing
+### Dependencies
+- **`mcp-handler`** - Official MCP server framework with OAuth support
+- **`google-auth-library`** - Google token verification
+- **`next`** - React framework for the server application
+- **`zod`** - Schema validation for tool parameters
 
-When contributing to this project:
+### Security Features
+- ✅ **Token Verification** - Both Google ID tokens and access tokens
+- ✅ **User Context** - Tools receive authenticated user information
+- ✅ **Error Handling** - Proper 401/403 responses with WWW-Authenticate headers
+- ✅ **Scope Validation** - Configurable OAuth scope requirements
+- ✅ **Stateless** - No session storage, tokens verified per request
 
-1. **Always verify authentication** before implementing new features
-2. **Follow the established patterns** for tool registration and schema validation
-3. **Test both web interface and MCP protocol** for any changes
-4. **Maintain OAuth compliance** when modifying authentication flows
-5. **Use TypeScript strictly** - no `any` types without justification
-6. **Document any new environment variables** or configuration requirements
+### Google Cloud Console Setup
+**OAuth 2.0 Configuration**:
+- **Authorized Redirect URIs**: `http://localhost:3000/api/auth/callback/google`
+- **Authorized JavaScript Origins**: `http://localhost:3000`
+- **Application Type**: Web application
 
-## License
+## 🧪 Testing
 
-This project is intended for educational and demonstration purposes.
+### Manual Testing
+```bash
+# Test authentication with real Google token
+curl -X POST http://localhost:3000/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ya29.a0AS3H6N..." \
+  -d '{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"say_hello","arguments":{"name":"Test"}}}'
+```
+
+### Expected Success Log
+```
+Access token verified successfully for user: songjiangye2021@gmail.com
+```
+
+## 📖 Documentation
+
+- **[OAuth Implementation Plan](./OAUTH_IMPLEMENTATION_PLAN.md)** - Complete implementation guide
+- **[Agent Instructions](./agents.md)** - Development patterns and architecture
+
+## 🎯 Key Learnings
+
+1. **Flexible Token Handling** - Support multiple Google OAuth token types
+2. **Google UserInfo API** - Reliable verification for access tokens
+3. **RFC 9728 Compliance** - Essential for MCP client compatibility
+4. **Real-world Testing** - VS Code behavior differs from curl testing
+5. **Robust Error Handling** - Clear debugging and graceful failures
+
+## 🚀 Production Deployment
+
+This implementation is **production-ready** with:
+- Proper error handling and security
+- Stateless authentication (no database required)
+- Horizontal scaling support
+- Comprehensive logging for debugging
+
+Perfect for building authenticated MCP servers that integrate with VS Code and other MCP clients.
+
+---
+
+**Built with ❤️ using mcp-handler and Next.js 15**
