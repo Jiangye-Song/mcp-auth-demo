@@ -19,18 +19,55 @@ export async function GET(request: NextRequest) {
         originalRedirectUri,
         state,
         responseType,
+        codeChallenge: searchParams.get('code_challenge') ? 'present' : 'missing',
         userAgent: request.headers.get('user-agent')
     });
 
-    // Store the original redirect URI (client's dynamic port) in the state parameter
-    // so we can redirect back to it after OAuth completes
-    const extendedState = JSON.stringify({
-        originalState: state,
-        originalRedirectUri: originalRedirectUri
-    });
+    // For mcp-remote, we should NOT modify the state parameter as it uses it for PKCE coordination
+    // Only modify state for our manual testing scenarios
+    let finalState: string;
 
-    // Use our fixed redirect URI that's configured in Google Console
-    const fixedRedirectUri = 'http://localhost:3000/api/auth/callback/google';
+    // Check if this looks like a manual test (contains JSON) vs mcp-remote (simple string)
+    const isManualTest = state.includes('{') || state.includes('manual-test') || state.includes('simple-test');
+
+    if (isManualTest) {
+        // For manual testing, parse and extend the state
+        try {
+            const existingStateData = state ? JSON.parse(state) : {};
+            finalState = JSON.stringify({
+                originalState: existingStateData.originalState || state,
+                originalRedirectUri: originalRedirectUri,
+                codeVerifier: existingStateData.codeVerifier || null
+            });
+        } catch (e) {
+            // State is not JSON, treat as simple string
+            finalState = JSON.stringify({
+                originalState: state,
+                originalRedirectUri: originalRedirectUri,
+                codeVerifier: null
+            });
+        }
+        console.log('Manual test detected, extended state for callback coordination');
+    } else {
+        // For mcp-remote, preserve the original state unchanged
+        finalState = state;
+        console.log('MCP-Remote detected, preserving original state for PKCE coordination');
+    }    // Determine which redirect URI to use based on the original request
+    let finalRedirectUri: string;
+
+    if (isManualTest) {
+        // For manual testing, use our server's callback endpoint
+        if (originalRedirectUri?.includes('/oauth/callback')) {
+            finalRedirectUri = `${url.origin}/oauth/callback`;
+        } else {
+            finalRedirectUri = `${url.origin}/api/auth/callback/google`;
+        }
+        console.log('Manual test - using server callback:', finalRedirectUri);
+    } else {
+        // For mcp-remote, use the ORIGINAL redirect URI (their dynamic port)
+        finalRedirectUri = originalRedirectUri || `${url.origin}/oauth/callback`;
+        console.log('MCP-Remote - using original callback:', finalRedirectUri);
+    }
 
     // Ensure we always include the required scope parameter
     const scope = 'openid email profile';
@@ -38,15 +75,30 @@ export async function GET(request: NextRequest) {
     // Build the Google OAuth authorization URL with all required parameters
     const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     googleAuthUrl.searchParams.set('client_id', clientId!);
-    googleAuthUrl.searchParams.set('redirect_uri', fixedRedirectUri);
+    googleAuthUrl.searchParams.set('redirect_uri', finalRedirectUri);
     googleAuthUrl.searchParams.set('response_type', responseType);
     googleAuthUrl.searchParams.set('scope', scope);
     googleAuthUrl.searchParams.set('access_type', 'offline');
     googleAuthUrl.searchParams.set('prompt', 'consent');
-    googleAuthUrl.searchParams.set('state', extendedState);
+    googleAuthUrl.searchParams.set('state', finalState);
+
+    // Add PKCE parameters if provided (for Claude Desktop)
+    const codeChallenge = searchParams.get('code_challenge');
+    const codeChallengeMethod = searchParams.get('code_challenge_method');
+    if (codeChallenge && codeChallengeMethod) {
+        googleAuthUrl.searchParams.set('code_challenge', codeChallenge);
+        googleAuthUrl.searchParams.set('code_challenge_method', codeChallengeMethod);
+        console.log('Added PKCE parameters for Claude Desktop');
+    }
+
+    // Note: We deliberately exclude the 'resource' parameter as it's not supported by Google OAuth
+    const resourceParam = searchParams.get('resource');
+    if (resourceParam) {
+        console.log('Ignoring unsupported resource parameter:', resourceParam);
+    }
 
     console.log('Client redirect URI:', originalRedirectUri);
-    console.log('Using fixed redirect URI:', fixedRedirectUri);
+    console.log('Using final redirect URI:', finalRedirectUri);
     console.log('Redirecting to Google OAuth with URL:', googleAuthUrl.toString());
 
     // Redirect to Google OAuth with proper parameters

@@ -1,5 +1,16 @@
 /**
- * OAuth 2.0 Dynamic Client Registration endpoint (RFC 7591)
+ * OAuth 2.0 Dyna            redirect_uris: [
+                `${new URL(req.url).origin}/api/auth/callback/google`,
+                // Claude Desktop callback patterns
+                `${new URL(req.url).origin}/oauth/callback`,
+                // Common MCP client callback patterns
+                "http://localhost:6180/oauth/callback",
+                "http://localhost:6181/oauth/callback", 
+                "http://localhost:6182/oauth/callback",
+                "http://localhost:6183/oauth/callback",
+                "http://localhost:6184/oauth/callback",
+                "http://localhost:6185/oauth/callback"
+            ], Registration endpoint (RFC 7591)
  * 
  * This endpoint allows MCP clients like Claude Desktop to dynamically register
  * themselves as OAuth clients. Since we're using Google OAuth, we return our
@@ -12,6 +23,26 @@ export async function POST(req: Request) {
     try {
         const registrationRequest = await req.json();
 
+        // Use the redirect URIs provided by the client, with fallbacks
+        const clientRedirectUris = registrationRequest.redirect_uris || [];
+        const baseRedirectUris = [
+            `${new URL(req.url).origin}/api/auth/callback/google`,
+            `${new URL(req.url).origin}/oauth/callback`,
+        ];
+
+        // Combine client-provided URIs with our server URIs
+        const allRedirectUris = [
+            ...clientRedirectUris,  // MCP-remote's dynamic URIs
+            ...baseRedirectUris,    // Our server's callback URIs
+            // Common fallback patterns
+            "http://localhost:6180/oauth/callback",
+            "http://localhost:6181/oauth/callback",
+            "http://localhost:6182/oauth/callback",
+            "http://localhost:6183/oauth/callback",
+            "http://localhost:6184/oauth/callback",
+            "http://localhost:6185/oauth/callback"
+        ];
+
         // For MCP clients, we return our pre-configured Google OAuth client
         // In a real dynamic registration scenario, we would create new clients
         // But since we're using Google OAuth, we use our existing client
@@ -20,16 +51,7 @@ export async function POST(req: Request) {
             client_secret: process.env.GOOGLE_CLIENT_SECRET,
             client_id_issued_at: Math.floor(Date.now() / 1000),
             client_secret_expires_at: 0, // Never expires for Google OAuth
-            redirect_uris: [
-                `${new URL(req.url).origin}/api/auth/callback/google`,
-                // Add common MCP client callback patterns
-                "http://localhost:6180/oauth/callback",
-                "http://localhost:6181/oauth/callback",
-                "http://localhost:6182/oauth/callback",
-                "http://localhost:6183/oauth/callback",
-                "http://localhost:6184/oauth/callback",
-                "http://localhost:6185/oauth/callback"
-            ],
+            redirect_uris: allRedirectUris,
             grant_types: ["authorization_code"],
             response_types: ["code"],
             token_endpoint_auth_method: "client_secret_post",
