@@ -58,9 +58,9 @@ export async function GET(request: NextRequest) {
         console.log('MCP-Remote detected, storing redirect URI while preserving state for PKCE coordination');
     }    // Determine which redirect URI to use based on the original request
     let finalRedirectUri: string;
-    
+
     // Get the production URL from Vercel environment or construct from request
-    const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL 
+    const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
         : url.origin;
 

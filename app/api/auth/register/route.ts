@@ -25,12 +25,12 @@ export async function POST(req: Request) {
 
         // Use the redirect URIs provided by the client, with fallbacks
         const clientRedirectUris = registrationRequest.redirect_uris || [];
-        
+
         // Get the production URL from Vercel environment or construct from request
-        const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL 
+        const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
             ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
             : new URL(req.url).origin;
-            
+
         const baseRedirectUris = [
             `${productionUrl}/api/auth/callback/google`,
             `${productionUrl}/oauth/callback`,

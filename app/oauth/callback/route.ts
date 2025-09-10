@@ -32,21 +32,45 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if this is a manual test vs mcp-remote
-    const isManualTest = stateParam?.includes('{') || stateParam?.includes('manual-test') || stateParam?.includes('simple-test');
+    // Manual tests will have specific markers in their state
+    // MCP-remote will either have our wrapped state format or a simple string
+    let isManualTest = false;
+    let mcpOriginalState = stateParam;
+    let originalRedirectUri = '';
+    let codeVerifier = '';
+
+    try {
+        if (stateParam) {
+            const stateData = JSON.parse(stateParam);
+            
+            // Check if this is our wrapped mcp-remote state format
+            if (stateData.mcpState !== undefined) {
+                // This is mcp-remote with our wrapped state
+                isManualTest = false;
+                mcpOriginalState = stateData.mcpState;
+                originalRedirectUri = stateData.originalRedirectUri || '';
+                console.log('Detected wrapped mcp-remote state');
+            } else if (stateData.originalState !== undefined || 
+                       stateParam.includes('manual-test') || 
+                       stateParam.includes('simple-test')) {
+                // This is a manual test
+                isManualTest = true;
+                codeVerifier = stateData.codeVerifier || '';
+                console.log('Detected manual test state');
+            } else {
+                // Unknown JSON format, treat as manual test to be safe
+                isManualTest = true;
+                console.log('Unknown JSON state format, treating as manual test');
+            }
+        }
+    } catch (e) {
+        // State is not JSON, could be mcp-remote with simple string state
+        isManualTest = false;
+        console.log('State is not JSON, treating as mcp-remote');
+    }
 
     if (isManualTest) {
         console.log('Manual test detected, performing token exchange');
-
-        // Parse state to get code verifier for PKCE
-        let codeVerifier = '';
-        try {
-            if (stateParam) {
-                const stateData = JSON.parse(stateParam);
-                codeVerifier = stateData.codeVerifier || '';
-            }
-        } catch (e) {
-            console.log('Could not parse state as JSON');
-        }
 
         // Perform token exchange for manual tests
         const tokenRequestBody = new URLSearchParams({
@@ -102,27 +126,6 @@ export async function GET(request: NextRequest) {
         }
     } else {
         console.log('MCP-Remote detected, forwarding to localhost callback');
-
-        // Parse state to extract mcp-remote's original state and redirect URI
-        let mcpOriginalState = stateParam;
-        let originalRedirectUri = '';
-        
-        try {
-            if (stateParam) {
-                const stateData = JSON.parse(stateParam);
-                // Check if this is our wrapped state format
-                if (stateData.mcpState !== undefined) {
-                    mcpOriginalState = stateData.mcpState;
-                    originalRedirectUri = stateData.originalRedirectUri || '';
-                    console.log('Extracted mcp-remote state and redirect URI from our wrapper');
-                } else {
-                    // Fallback: treat as old format
-                    originalRedirectUri = stateData.originalRedirectUri || '';
-                }
-            }
-        } catch (e) {
-            console.log('State is not JSON, using as-is');
-        }
 
         // Forward the authorization code to mcp-remote's localhost callback
         if (originalRedirectUri && originalRedirectUri.includes('localhost')) {
