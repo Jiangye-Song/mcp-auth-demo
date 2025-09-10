@@ -66,10 +66,37 @@ export async function POST(req: Request) {
             userinfo_endpoint: "https://www.googleapis.com/oauth2/v2/userinfo"
         };
 
+        // Check if we have the required environment variables
+        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+            console.error('Missing required environment variables:', {
+                GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
+                GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET
+            });
+            
+            return new Response(JSON.stringify({
+                error: "server_error",
+                error_description: "OAuth client credentials not configured"
+            }), {
+                status: 500,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                },
+            });
+        }
+
         console.log('Dynamic client registration request:', {
             clientName: registrationRequest.client_name,
             clientUri: registrationRequest.client_uri,
             redirectUris: registrationRequest.redirect_uris
+        });
+        
+        console.log('Environment variables check:', {
+            hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+            hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+            googleClientIdLength: process.env.GOOGLE_CLIENT_ID?.length || 0,
+            // Only log first few chars for security
+            googleClientIdPreview: process.env.GOOGLE_CLIENT_ID?.substring(0, 10) + '...' || 'undefined'
         });
 
         return new Response(JSON.stringify(clientRegistration), {
