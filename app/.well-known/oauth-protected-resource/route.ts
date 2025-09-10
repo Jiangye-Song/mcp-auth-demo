@@ -1,6 +1,5 @@
 import {
     generateProtectedResourceMetadata,
-    metadataCorsOptionsRequestHandler,
 } from "mcp-handler";
 
 /**
@@ -66,7 +65,21 @@ function handler(req: Request) {
     });
 }
 
+function optionsHandler() {
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Max-Age": "86400",
+    };
+
+    return new Response(null, {
+        status: 200,
+        headers: corsHeaders,
+    });
+}
+
 export {
     handler as GET,
-    metadataCorsOptionsRequestHandler as OPTIONS
+    optionsHandler as OPTIONS
 };
