@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     });
 
     // For mcp-remote, we should NOT modify the state parameter as it uses it for PKCE coordination
-    // Only modify state for our manual testing scenarios
+    // But we need to store the original redirect URI somehow so we can forward back to localhost
     let finalState: string;
 
     // Check if this looks like a manual test (contains JSON) vs mcp-remote (simple string)
@@ -49,24 +49,34 @@ export async function GET(request: NextRequest) {
         }
         console.log('Manual test detected, extended state for callback coordination');
     } else {
-        // For mcp-remote, preserve the original state unchanged
-        finalState = state;
-        console.log('MCP-Remote detected, preserving original state for PKCE coordination');
+        // For mcp-remote, we need to preserve their state but also store the redirect URI
+        // We'll encode both pieces of information in a way that preserves mcp-remote's state
+        finalState = JSON.stringify({
+            mcpState: state,  // Preserve mcp-remote's original state
+            originalRedirectUri: originalRedirectUri  // Store for our callback forwarding
+        });
+        console.log('MCP-Remote detected, storing redirect URI while preserving state for PKCE coordination');
     }    // Determine which redirect URI to use based on the original request
     let finalRedirectUri: string;
+    
+    // Get the production URL from Vercel environment or construct from request
+    const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL 
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : url.origin;
 
     if (isManualTest) {
         // For manual testing, use our server's callback endpoint
         if (originalRedirectUri?.includes('/oauth/callback')) {
-            finalRedirectUri = `${url.origin}/oauth/callback`;
+            finalRedirectUri = `${productionUrl}/oauth/callback`;
         } else {
-            finalRedirectUri = `${url.origin}/api/auth/callback/google`;
+            finalRedirectUri = `${productionUrl}/api/auth/callback/google`;
         }
         console.log('Manual test - using server callback:', finalRedirectUri);
     } else {
-        // For mcp-remote, use the ORIGINAL redirect URI (their dynamic port)
-        finalRedirectUri = originalRedirectUri || `${url.origin}/oauth/callback`;
-        console.log('MCP-Remote - using original callback:', finalRedirectUri);
+        // For mcp-remote, ALWAYS use our production server callback
+        // We'll handle forwarding the code back to mcp-remote's localhost in the callback handler
+        finalRedirectUri = `${productionUrl}/oauth/callback`;
+        console.log('MCP-Remote - using production server callback (will forward to localhost):', finalRedirectUri);
     }
 
     // Ensure we always include the required scope parameter

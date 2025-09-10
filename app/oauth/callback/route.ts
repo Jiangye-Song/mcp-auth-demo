@@ -101,12 +101,50 @@ export async function GET(request: NextRequest) {
             }, { status: 500 });
         }
     } else {
-        console.log('MCP-Remote detected, returning authorization code for client-side token exchange');
+        console.log('MCP-Remote detected, forwarding to localhost callback');
 
-        // For mcp-remote, just return success - it will handle token exchange itself
+        // Parse state to extract mcp-remote's original state and redirect URI
+        let mcpOriginalState = stateParam;
+        let originalRedirectUri = '';
+        
+        try {
+            if (stateParam) {
+                const stateData = JSON.parse(stateParam);
+                // Check if this is our wrapped state format
+                if (stateData.mcpState !== undefined) {
+                    mcpOriginalState = stateData.mcpState;
+                    originalRedirectUri = stateData.originalRedirectUri || '';
+                    console.log('Extracted mcp-remote state and redirect URI from our wrapper');
+                } else {
+                    // Fallback: treat as old format
+                    originalRedirectUri = stateData.originalRedirectUri || '';
+                }
+            }
+        } catch (e) {
+            console.log('State is not JSON, using as-is');
+        }
+
+        // Forward the authorization code to mcp-remote's localhost callback
+        if (originalRedirectUri && originalRedirectUri.includes('localhost')) {
+            try {
+                const forwardUrl = new URL(originalRedirectUri);
+                forwardUrl.searchParams.set('code', code);
+                forwardUrl.searchParams.set('state', mcpOriginalState || '');
+
+                console.log('Forwarding to mcp-remote localhost:', forwardUrl.toString());
+
+                // Redirect to mcp-remote's localhost callback
+                return NextResponse.redirect(forwardUrl.toString());
+            } catch (err) {
+                console.error('Failed to forward to mcp-remote localhost:', err);
+            }
+        }
+
+        // Fallback: return the code as JSON if we can't redirect
+        console.log('Could not redirect to localhost, returning code as JSON');
         return NextResponse.json({
             code: code,
-            state: stateParam,
+            state: mcpOriginalState,
             status: 'authorization_successful'
         }, {
             headers: {

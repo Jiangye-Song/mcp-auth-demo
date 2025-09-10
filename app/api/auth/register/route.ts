@@ -25,22 +25,24 @@ export async function POST(req: Request) {
 
         // Use the redirect URIs provided by the client, with fallbacks
         const clientRedirectUris = registrationRequest.redirect_uris || [];
+        
+        // Get the production URL from Vercel environment or construct from request
+        const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL 
+            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+            : new URL(req.url).origin;
+            
         const baseRedirectUris = [
-            `${new URL(req.url).origin}/api/auth/callback/google`,
-            `${new URL(req.url).origin}/oauth/callback`,
+            `${productionUrl}/api/auth/callback/google`,
+            `${productionUrl}/oauth/callback`,
         ];
 
-        // Combine client-provided URIs with our server URIs
+        // For Google OAuth, we can ONLY use pre-registered redirect URIs
+        // We cannot use dynamic localhost ports that mcp-remote generates
+        // Instead, we'll use our production server as a proxy
         const allRedirectUris = [
-            ...clientRedirectUris,  // MCP-remote's dynamic URIs
-            ...baseRedirectUris,    // Our server's callback URIs
-            // Common fallback patterns
-            "http://localhost:6180/oauth/callback",
-            "http://localhost:6181/oauth/callback",
-            "http://localhost:6182/oauth/callback",
-            "http://localhost:6183/oauth/callback",
-            "http://localhost:6184/oauth/callback",
-            "http://localhost:6185/oauth/callback"
+            ...baseRedirectUris,    // Our production server's callback URIs (these are registered in Google)
+            // Note: We removed localhost URLs because Google OAuth requires pre-registered redirect URIs
+            // Our server will act as a proxy to forward codes back to mcp-remote's localhost
         ];
 
         // For MCP clients, we return our pre-configured Google OAuth client
@@ -72,7 +74,7 @@ export async function POST(req: Request) {
                 GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
                 GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET
             });
-            
+
             return new Response(JSON.stringify({
                 error: "server_error",
                 error_description: "OAuth client credentials not configured"
@@ -90,7 +92,7 @@ export async function POST(req: Request) {
             clientUri: registrationRequest.client_uri,
             redirectUris: registrationRequest.redirect_uris
         });
-        
+
         console.log('Environment variables check:', {
             hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
             hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
