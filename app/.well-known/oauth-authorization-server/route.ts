@@ -18,8 +18,8 @@ export async function GET(req: Request) {
         // Authorization endpoint - use our custom endpoint
         authorization_endpoint: `${origin}/api/auth/authorize`,
 
-        // Token endpoint - Google's endpoint
-        token_endpoint: "https://oauth2.googleapis.com/token",
+        // Token endpoint - our custom endpoint that handles redirect_uri correctly
+        token_endpoint: `${origin}/api/auth/token`,
 
         // Dynamic client registration endpoint - our custom endpoint
         registration_endpoint: `${origin}/api/auth/register`,

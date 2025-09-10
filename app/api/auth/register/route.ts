@@ -64,7 +64,8 @@ export async function POST(req: Request) {
             client_uri: registrationRequest.client_uri,
             // Return the authorization server endpoints
             authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-            token_endpoint: "https://oauth2.googleapis.com/token",
+            // Use our custom token endpoint that handles redirect_uri correctly
+            token_endpoint: `${productionUrl}/api/auth/token`,
             userinfo_endpoint: "https://www.googleapis.com/oauth2/v2/userinfo"
         };
 
