@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
                 isManualTest = false;
                 mcpOriginalState = stateData.mcpState;
                 originalRedirectUri = stateData.originalRedirectUri || '';
-                console.log('Detected wrapped mcp-remote state');
+                console.log('Detected wrapped mcp-remote state, originalRedirectUri:', originalRedirectUri);
             } else if (stateData.originalState !== undefined ||
                 stateParam.includes('manual-test') ||
                 stateParam.includes('simple-test')) {
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     } catch (e) {
         // State is not JSON, could be mcp-remote with simple string state
         isManualTest = false;
-        console.log('State is not JSON, treating as mcp-remote');
+        console.log('State is not JSON, treating as mcp-remote (but no originalRedirectUri available)');
     }
 
     if (isManualTest) {
@@ -125,13 +125,29 @@ export async function GET(request: NextRequest) {
             }, { status: 500 });
         }
     } else {
-        console.log('MCP-Remote detected, returning code for token exchange');
+        console.log('MCP-Remote detected, redirecting to localhost callback');
 
-        // For mcp-remote, we DON'T redirect to localhost because that would consume the code
-        // Instead, we return a JSON response and let mcp-remote handle the token exchange
-        // via our custom token endpoint
+        // For mcp-remote, we need to redirect back to their localhost callback
+        // The authorization code will be consumed by mcp-remote, which will then
+        // use our custom token endpoint for the token exchange
         
-        console.log('Returning authorization code for mcp-remote to exchange via token endpoint');
+        if (originalRedirectUri && originalRedirectUri.includes('localhost')) {
+            try {
+                const forwardUrl = new URL(originalRedirectUri);
+                forwardUrl.searchParams.set('code', code);
+                forwardUrl.searchParams.set('state', mcpOriginalState || '');
+
+                console.log('Redirecting to mcp-remote localhost:', forwardUrl.toString());
+
+                // Redirect to mcp-remote's localhost callback
+                return NextResponse.redirect(forwardUrl.toString());
+            } catch (err) {
+                console.error('Failed to redirect to mcp-remote localhost:', err);
+            }
+        }
+
+        // Fallback: return the code as JSON if we can't redirect
+        console.log('Could not redirect to localhost, returning code as JSON');
         return NextResponse.json({
             code: code,
             state: mcpOriginalState,
