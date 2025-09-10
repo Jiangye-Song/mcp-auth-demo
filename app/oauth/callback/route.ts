@@ -19,6 +19,8 @@ export async function GET(request: NextRequest) {
     console.log('Code:', code ? 'present' : 'missing');
     console.log('Error:', error);
     console.log('State:', stateParam);
+    console.log('State type:', typeof stateParam);
+    console.log('State length:', stateParam?.length || 0);
     console.log('Full URL:', request.url);
 
     if (error) {
@@ -130,7 +132,7 @@ export async function GET(request: NextRequest) {
         // For mcp-remote, we need to redirect back to their localhost callback
         // The authorization code will be consumed by mcp-remote, which will then
         // use our custom token endpoint for the token exchange
-        
+
         if (originalRedirectUri && originalRedirectUri.includes('localhost')) {
             try {
                 const forwardUrl = new URL(originalRedirectUri);

@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
         state,
         responseType,
         codeChallenge: searchParams.get('code_challenge') ? 'present' : 'missing',
-        userAgent: request.headers.get('user-agent')
+        userAgent: request.headers.get('user-agent'),
+        stateContainsJson: state.includes('{'),
+        stateContainsManualTest: state.includes('manual-test'),
+        stateContainsSimpleTest: state.includes('simple-test')
     });
 
     // For mcp-remote, we should NOT modify the state parameter as it uses it for PKCE coordination
@@ -56,6 +59,7 @@ export async function GET(request: NextRequest) {
             originalRedirectUri: originalRedirectUri  // Store for our callback forwarding
         });
         console.log('MCP-Remote detected, storing redirect URI while preserving state for PKCE coordination');
+        console.log('Wrapped state:', finalState);
     }    // Determine which redirect URI to use based on the original request
     let finalRedirectUri: string;
 
