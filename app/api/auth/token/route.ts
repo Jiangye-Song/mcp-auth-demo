@@ -12,9 +12,10 @@ export async function POST(request: NextRequest) {
 
         console.log('Token exchange request received:', {
             grant_type: tokenParams.get('grant_type'),
-            code: tokenParams.get('code') ? 'present' : 'missing',
+            code: tokenParams.get('code') ? `${tokenParams.get('code')?.substring(0, 20)}...` : 'missing',
             redirect_uri: tokenParams.get('redirect_uri'),
-            code_verifier: tokenParams.get('code_verifier') ? 'present' : 'missing'
+            code_verifier: tokenParams.get('code_verifier') ? 'present' : 'missing',
+            client_id: tokenParams.get('client_id') ? 'present' : 'missing'
         });
 
         // Get the production URL from Vercel environment or construct from request
@@ -39,7 +40,12 @@ export async function POST(request: NextRequest) {
             console.log('Added code_verifier for PKCE flow');
         }
 
-        console.log('Forwarding token exchange to Google OAuth with production redirect_uri');
+        console.log('Forwarding token exchange to Google OAuth with:', {
+            client_id: process.env.GOOGLE_CLIENT_ID?.substring(0, 10) + '...',
+            redirect_uri: `${productionUrl}/oauth/callback`,
+            code_present: !!tokenParams.get('code'),
+            code_verifier_present: !!codeVerifier
+        });
 
         // Exchange the authorization code with Google OAuth
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
         if (!tokenResponse.ok) {
             const errorData = await tokenResponse.text();
             console.error('Google token exchange failed:', errorData);
-            
+
             return new Response(errorData, {
                 status: tokenResponse.status,
                 headers: {
