@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth Success</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .success {
+            color: #28a745;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .token-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+        }
+
+        .token-preview {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 3px;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+
+        .next-steps {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .copy-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="success">✅ OAuth Authentication Successful!</div>
+
+        <div class="token-info">
+            <h3>Authentication Token Received</h3>
+            <p>Your Google OAuth authentication was successful. The ID token has been generated and can be used for MCP
+                authentication.</p>
+
+            <div id="tokenSection" style="display: none;">
+                <p><strong>Token Preview:</strong></p>
+                <div class="token-preview" id="tokenPreview"></div>
+                <button class="copy-btn" onclick="copyToken()">Copy Full Token</button>
+            </div>
+        </div>
+
+        <div class="next-steps">
+            <h3>Next Steps</h3>
+            <ul>
+                <li>VS Code should automatically detect and use this token for MCP authentication</li>
+                <li>If you're testing manually, you can copy the token above</li>
+                <li>The token is valid for approximately 1 hour</li>
+                <li>You can close this window/tab</li>
+            </ul>
+        </div>
+
+        <div id="debugInfo" style="display: none;">
+            <h3>Debug Information</h3>
+            <div id="debugContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Extract token from URL fragment
+        function extractTokenFromURL() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+
+            const accessToken = params.get('access_token');
+            const tokenType = params.get('token_type');
+            const expiresIn = params.get('expires_in');
+            const state = params.get('state');
+            const error = params.get('error');
+
+            if (error) {
+                document.querySelector('.success').innerHTML = '❌ OAuth Error';
+                document.querySelector('.token-info').innerHTML = `
+                    <h3>Authentication Error</h3>
+                    <p><strong>Error:</strong> ${error}</p>
+                    <p><strong>Description:</strong> ${params.get('error_description') || 'Unknown error'}</p>
+                `;
+                return;
+            }
+
+            if (accessToken) {
+                document.getElementById('tokenSection').style.display = 'block';
+                document.getElementById('tokenPreview').textContent = accessToken.substring(0, 100) + '...';
+
+                // Store full token for copying
+                window.fullToken = accessToken;
+
+                // Send token to parent window if this is in an iframe
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'oauth-success',
+                        access_token: accessToken,
+                        token_type: tokenType,
+                        expires_in: expiresIn,
+                        state: state
+                    }, '*');
+                }
+
+                // Auto-close after 3 seconds if in popup
+                if (window.opener) {
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                }
+            }
+
+            // Show debug info
+            const debugInfo = document.getElementById('debugInfo');
+            const debugContent = document.getElementById('debugContent');
+            debugContent.innerHTML = `
+                <p><strong>URL Hash:</strong> ${hash}</p>
+                <p><strong>Access Token:</strong> ${accessToken ? 'Present (' + accessToken.length + ' chars)' : 'Missing'}</p>
+                <p><strong>Token Type:</strong> ${tokenType || 'Not specified'}</p>
+                <p><strong>Expires In:</strong> ${expiresIn || 'Not specified'}</p>
+                <p><strong>State:</strong> ${state || 'Not specified'}</p>
+            `;
+
+            // Show debug info if URL contains debug parameter
+            if (window.location.search.includes('debug=true')) {
+                debugInfo.style.display = 'block';
+            }
+        }
+
+        function copyToken() {
+            if (window.fullToken) {
+                navigator.clipboard.writeText(window.fullToken).then(() => {
+                    const btn = document.querySelector('.copy-btn');
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '#007bff';
+                    }, 2000);
+                });
+            }
+        }
+
+        // Extract token when page loads
+        extractTokenFromURL();
+    </script>
+</body>
+
+</html>

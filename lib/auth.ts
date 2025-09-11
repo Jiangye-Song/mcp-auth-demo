@@ -17,16 +17,85 @@ export async function verifyGoogleToken(
     req: Request,
     bearerToken?: string
 ): Promise<AuthInfo | undefined> {
-    console.log('=== TOKEN VERIFICATION ===');
+    console.log('=== ENHANCED TOKEN VERIFICATION ===');
     console.log('Bearer token provided:', !!bearerToken);
     console.log('Token length:', bearerToken?.length || 0);
-    console.log('Token preview:', bearerToken ? `${bearerToken.substring(0, 50)}...` : 'none');
+    console.log('Token preview:', bearerToken ? `${bearerToken.substring(0, 30)}...` : 'none');
     console.log('Request URL:', req.url);
-    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
-    console.log('===========================');
+    console.log('Request method:', req.method);
+
+    // Check ALL possible authorization headers
+    const authHeaders = [
+        'authorization',
+        'Authorization',
+        'bearer',
+        'Bearer',
+        'x-auth-token',
+        'x-authorization'
+    ];
+
+    console.log('Checking all auth header variants:');
+    authHeaders.forEach(header => {
+        const value = req.headers.get(header);
+        if (value) {
+            console.log(`  ✅ ${header}: ${value.substring(0, 30)}...`);
+        } else {
+            console.log(`  ❌ ${header}: not present`);
+        }
+    });
+
+    // Try to extract token from any auth header if bearerToken is missing
+    if (!bearerToken) {
+        for (const header of authHeaders) {
+            const value = req.headers.get(header);
+            if (value) {
+                if (value.startsWith('Bearer ')) {
+                    bearerToken = value.substring(7);
+                    console.log(`Found token in ${header} header`);
+                    break;
+                } else if (value.startsWith('bearer ')) {
+                    bearerToken = value.substring(7);
+                    console.log(`Found token in ${header} header (lowercase)`);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Development bypasses for testing
+    if (!bearerToken && process.env.NODE_ENV === 'development') {
+        const devToken = process.env.DEV_AUTH_TOKEN;
+        if (devToken) {
+            console.log('🚀 Using development token for testing');
+            bearerToken = devToken;
+        }
+
+        // Check for injected debug token
+        if (!bearerToken && (globalThis as any).mcpDebugToken) {
+            console.log('🧪 Using injected debug token');
+            bearerToken = (globalThis as any).mcpDebugToken;
+        }
+
+        // Skip auth completely if configured
+        if (process.env.SKIP_AUTH === 'true') {
+            console.log('🚨 DEVELOPMENT MODE: Skipping authentication completely');
+            return {
+                token: 'dev-bypass',
+                scopes: ['read:mcp', 'write:mcp'],
+                clientId: 'dev-user',
+                extra: {
+                    email: 'dev@example.com',
+                    name: 'Development User'
+                }
+            };
+        }
+    }
+
+    console.log('Final token status:', !!bearerToken);
+    console.log('===================================');
 
     if (!bearerToken) {
-        console.log('No bearer token provided');
+        console.log('❌ No bearer token found after all checks');
         return undefined;
     }
 

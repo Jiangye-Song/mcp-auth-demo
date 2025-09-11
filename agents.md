@@ -42,3 +42,6 @@ None required - no authentication
 4. Use simple `createMcpHandler` pattern
 5. Test via direct MCP calls or web interface
 6. Based on roll dice server architecture (simple and clean)
+7. Always use pnpm
+8. Dev on 3000, if 3000 occupied, kill server on 3000
+9. Use PowerShell command instead of curl
