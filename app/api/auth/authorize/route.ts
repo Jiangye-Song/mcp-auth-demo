@@ -89,22 +89,36 @@ export async function GET(request: NextRequest) {
         `${new URL(request.url).origin}/api/auth/callback/google`
     ];
 
-    // Allow dynamic ports for VS Code (pattern: http://127.0.0.1:{port}/)
+    // Allow dynamic ports for VS Code and MCP Remote
     const vsCodePattern = /^http:\/\/127\.0\.0\.1:\d+\/?$/;
     const vsCodeLocalhostPattern = /^http:\/\/localhost:\d+\/?$/;
-    const mcpRemotePattern = /^http:\/\/127\.0\.0\.1:\d+\/oauth\/callback$/;
+    const mcpRemotePattern = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/oauth\/callback$/;
+    const mcpRemoteLocalhostPattern = /^http:\/\/localhost:\d+\/oauth\/callback$/;
 
-    if (!validRedirectUris.includes(redirectUri) &&
-        !vsCodePattern.test(redirectUri) &&
-        !vsCodeLocalhostPattern.test(redirectUri) &&
-        !mcpRemotePattern.test(redirectUri) &&
-        !redirectUri.startsWith('vscode://') &&
-        !redirectUri.startsWith('vscode-insiders://')) {
+    const isValidDynamicRedirect =
+        vsCodePattern.test(redirectUri) ||
+        vsCodeLocalhostPattern.test(redirectUri) ||
+        mcpRemotePattern.test(redirectUri) ||
+        mcpRemoteLocalhostPattern.test(redirectUri) ||
+        redirectUri.startsWith('vscode://') ||
+        redirectUri.startsWith('vscode-insiders://');
+
+    if (!validRedirectUris.includes(redirectUri) && !isValidDynamicRedirect) {
         console.log('❌ Invalid redirect_uri:', redirectUri);
+        console.log('📋 Allowed patterns: VS Code (127.0.0.1:port/), MCP Remote (localhost:port/oauth/callback)');
         return NextResponse.json({
             error: 'invalid_request',
             error_description: 'Invalid redirect_uri'
         }, { status: 400 });
+    }
+
+    // Log successful redirect URI validation
+    if (mcpRemotePattern.test(redirectUri) || mcpRemoteLocalhostPattern.test(redirectUri)) {
+        console.log('✅ MCP Remote redirect URI validated:', redirectUri);
+    } else if (vsCodePattern.test(redirectUri) || vsCodeLocalhostPattern.test(redirectUri)) {
+        console.log('✅ VS Code redirect URI validated:', redirectUri);
+    } else {
+        console.log('✅ Static redirect URI validated:', redirectUri);
     }
 
     // Generate authorization code

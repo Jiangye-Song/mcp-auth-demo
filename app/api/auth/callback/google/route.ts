@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
 
                 // Detect client type based on redirect URI pattern
                 if (originalRedirectUri.includes('oauth/callback')) {
-                    clientType = 'claude-desktop';
+                    // MCP Remote (mcp-remote tool) and Claude Desktop both use /oauth/callback pattern
+                    clientType = 'mcp-remote';
                 } else if (originalRedirectUri.includes('vscode.dev/redirect')) {
                     clientType = 'vscode-web';
                 } else if (originalRedirectUri.startsWith('http://127.0.0.1:') ||
@@ -156,20 +157,25 @@ export async function GET(request: NextRequest) {
         console.log('Original state:', originalState);
 
         if (tokens.id_token) {
-            if (clientType === 'claude-desktop') {
-                // Claude Desktop uses query parameters
+            if (clientType === 'mcp-remote') {
+                // MCP Remote expects authorization code flow (like VS Code)
                 const clientRedirectUrl = new URL(originalRedirectUri);
-                clientRedirectUrl.searchParams.set('access_token', tokens.access_token);
-                clientRedirectUrl.searchParams.set('id_token', tokens.id_token);
-                clientRedirectUrl.searchParams.set('token_type', 'Bearer');
-                if (tokens.expires_in) {
-                    clientRedirectUrl.searchParams.set('expires_in', tokens.expires_in.toString());
+
+                // Return our authorization code (not Google's tokens directly)
+                if (authCode) {
+                    clientRedirectUrl.searchParams.set('code', authCode);
+                } else {
+                    // Fallback: use Google's code directly
+                    clientRedirectUrl.searchParams.set('code', code);
                 }
+
                 if (originalState) {
                     clientRedirectUrl.searchParams.set('state', originalState);
                 }
+
                 finalRedirectUrl = clientRedirectUrl.toString();
-                console.log('Using query parameters for Claude Desktop');
+                console.log('Using authorization code flow for MCP Remote');
+                console.log('Returning authorization code for MCP Remote to exchange:', authCode || code);
             } else if (clientType === 'vscode-web' && originalRedirectUri === 'https://vscode.dev/redirect') {
                 // VS Code web redirect - use vscode.dev redirect with parameters
                 console.log('Processing VS Code web redirect');
