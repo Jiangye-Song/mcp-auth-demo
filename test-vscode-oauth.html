@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>VS Code OAuth Test</title>
+</head>
+
+<body>
+    <h1>VS Code OAuth Callback Test</h1>
+
+    <h2>Current URL:</h2>
+    <p id="currentUrl"></p>
+
+    <h2>URL Parameters (Query):</h2>
+    <div id="queryParams"></div>
+
+    <h2>URL Fragment (Hash):</h2>
+    <div id="hashParams"></div>
+
+    <h2>Actions:</h2>
+    <button onclick="testQueryRedirect()">Test Query Parameters</button>
+    <button onclick="testFragmentRedirect()">Test Fragment Parameters</button>
+
+    <script>
+        // Display current URL
+        document.getElementById('currentUrl').textContent = window.location.href;
+
+        // Parse and display query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryDiv = document.getElementById('queryParams');
+        if (urlParams.toString()) {
+            queryDiv.innerHTML = '<pre>' + Array.from(urlParams.entries()).map(([k, v]) => `${k}: ${v}`).join('\n') + '</pre>';
+        } else {
+            queryDiv.textContent = 'No query parameters';
+        }
+
+        // Parse and display hash parameters
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hashDiv = document.getElementById('hashParams');
+        if (hashParams.toString()) {
+            hashDiv.innerHTML = '<pre>' + Array.from(hashParams.entries()).map(([k, v]) => `${k}: ${v}`).join('\n') + '</pre>';
+        } else {
+            hashDiv.textContent = 'No hash parameters';
+        }
+
+        function testQueryRedirect() {
+            const testUrl = 'http://127.0.0.1:33418/?access_token=test_token&token_type=Bearer&expires_in=3600&state=test_state';
+            window.location.href = testUrl;
+        }
+
+        function testFragmentRedirect() {
+            const testUrl = 'http://127.0.0.1:33418/#access_token=test_token&token_type=Bearer&expires_in=3600&state=test_state';
+            window.location.href = testUrl;
+        }
+    </script>
+</body>
+
+</html>

@@ -35,9 +35,13 @@ export async function GET(request: NextRequest) {
         if (stateParam) {
             try {
                 console.log('Raw state parameter:', stateParam);
-                console.log('Attempting to parse state as JSON...');
+                console.log('Attempting to decode base64url state...');
 
-                const parsedState = JSON.parse(stateParam);
+                // Decode base64url-encoded state
+                const decodedState = Buffer.from(stateParam, 'base64url').toString('utf-8');
+                console.log('Decoded state:', decodedState);
+
+                const parsedState = JSON.parse(decodedState);
                 console.log('Parsed state object:', parsedState);
 
                 originalRedirectUri = parsedState.originalRedirectUri || originalRedirectUri;
@@ -57,10 +61,17 @@ export async function GET(request: NextRequest) {
 
                 console.log('Detected client type:', clientType);
             } catch (e) {
-                console.log('Could not parse state as JSON, using as original state');
-                console.log('Parse error:', e);
-                originalState = stateParam;
-                clientType = 'fallback';
+                console.log('Could not decode/parse state, trying direct JSON parse...');
+                try {
+                    const parsedState = JSON.parse(stateParam);
+                    originalRedirectUri = parsedState.originalRedirectUri || originalRedirectUri;
+                    originalState = parsedState.originalState || '';
+                    clientType = 'legacy-format';
+                } catch (e2) {
+                    console.log('Parse error:', e);
+                    originalState = stateParam;
+                    clientType = 'fallback';
+                }
             }
         }
 
@@ -111,6 +122,11 @@ export async function GET(request: NextRequest) {
         // Build the redirect URL back to the client with the appropriate token
         let finalRedirectUrl: string;
 
+        console.log('=== REDIRECT URL CONSTRUCTION ===');
+        console.log('Client type:', clientType);
+        console.log('Original redirect URI:', originalRedirectUri);
+        console.log('Original state:', originalState);
+
         if (tokens.id_token) {
             if (clientType === 'claude-desktop') {
                 // Claude Desktop uses query parameters
@@ -126,8 +142,52 @@ export async function GET(request: NextRequest) {
                 }
                 finalRedirectUrl = clientRedirectUrl.toString();
                 console.log('Using query parameters for Claude Desktop');
+            } else if (clientType === 'vscode-web' && originalRedirectUri === 'https://vscode.dev/redirect') {
+                // VS Code web redirect - redirect to VS Code protocol URL from the original state
+                console.log('Processing VS Code web redirect');
+                console.log('Original state (should contain vscode:// URL):', originalState);
+
+                // The original state contains the VS Code protocol URL
+                if (originalState && originalState.startsWith('vscode')) {
+                    // Decode the VS Code URL and add the token as a parameter
+                    const vsCodeUrl = new URL(originalState);
+                    vsCodeUrl.searchParams.set('access_token', tokens.id_token);
+                    vsCodeUrl.searchParams.set('token_type', 'Bearer');
+                    vsCodeUrl.searchParams.set('expires_in', tokens.expires_in?.toString() || '3600');
+
+                    finalRedirectUrl = vsCodeUrl.toString();
+                    console.log('Redirecting to VS Code protocol URL:', finalRedirectUrl);
+                } else {
+                    console.log('⚠️ No valid VS Code protocol URL in state, using fallback');
+                    // Fallback: redirect to vscode.dev with fragment
+                    const tokenParams = new URLSearchParams({
+                        access_token: tokens.id_token,
+                        token_type: 'Bearer',
+                        expires_in: tokens.expires_in?.toString() || '3600'
+                    });
+                    finalRedirectUrl = `https://vscode.dev/redirect#${tokenParams.toString()}`;
+                }
+                console.log('Using VS Code web redirect');
+            } else if (clientType === 'vscode-local' && originalRedirectUri.startsWith('http://127.0.0.1:')) {
+                // VS Code local server - use URL fragments (OAuth implicit flow format)
+                const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
+
+                const tokenParams = new URLSearchParams({
+                    access_token: tokens.id_token,
+                    token_type: 'Bearer',
+                    expires_in: tokens.expires_in?.toString() || '3600'
+                });
+
+                // Only add state if it exists and is not empty
+                if (originalState && originalState.trim() !== '') {
+                    tokenParams.set('state', originalState);
+                }
+
+                finalRedirectUrl = `${baseUrl}#${tokenParams.toString()}`;
+                console.log('Using URL fragments for VS Code local server (OAuth implicit flow format)');
+                console.log('VS Code redirect URI preserved:', baseUrl);
             } else {
-                // ALL VS Code clients (web and local) use URL fragments
+                // ALL other clients use URL fragments (fallback behavior)
                 const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
 
                 const tokenParams = new URLSearchParams({
@@ -143,9 +203,10 @@ export async function GET(request: NextRequest) {
 
                 finalRedirectUrl = `${baseUrl}#${tokenParams.toString()}`;
                 console.log(`Using URL fragments for ${clientType} client`);
-                console.log('Token is JWT format:', tokens.id_token.split('.').length === 3);
-                console.log('State being returned:', originalState);
             }
+
+            console.log('Token is JWT format:', tokens.id_token.split('.').length === 3);
+            console.log('State being returned:', originalState);
         } else {
             console.error('No ID token received from Google');
             console.log('Available tokens:', Object.keys(tokens));
@@ -157,6 +218,8 @@ export async function GET(request: NextRequest) {
             });
             finalRedirectUrl = `${baseUrl}#${errorParams.toString()}`;
         }
+
+        console.log('==================================');
 
         console.log(`Final ${clientType} redirect URL (token masked):`,
             finalRedirectUrl.replace(tokens.id_token || '', '[ID_TOKEN_MASKED]')

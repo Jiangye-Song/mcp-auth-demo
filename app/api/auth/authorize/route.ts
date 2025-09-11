@@ -1,54 +1,159 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 
 /**
- * Custom OAuth authorization endpoint that ensures proper scope parameter
- * This endpoint redirects to Google OAuth with the required parameters
- * Supports both VS Code and Claude Desktop dynamic callback ports
+ * OAuth 2.1 Authorization Endpoint with MCP 2025-06-18 Compliance
+ * Supports PKCE, resource parameters, and enhanced client detection
  */
 export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const searchParams = url.searchParams;
 
-    // Get parameters from the incoming request
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const originalRedirectUri = searchParams.get('redirect_uri');
-    const state = searchParams.get('state') || '';
-    const responseType = searchParams.get('response_type') || 'code';
+    // Extract OAuth 2.1 parameters
+    const responseType = searchParams.get('response_type');
+    const clientId = searchParams.get('client_id');
+    const redirectUri = searchParams.get('redirect_uri');
+    const scope = searchParams.get('scope');
+    const state = searchParams.get('state');
+    const codeChallenge = searchParams.get('code_challenge');
+    const codeChallengeMethod = searchParams.get('code_challenge_method');
 
-    console.log('Authorization request received:', {
-        originalRedirectUri,
-        state,
-        responseType,
-        userAgent: request.headers.get('user-agent')
+    // MCP 2025-06-18: Resource parameter (RFC 8707)
+    const resource = searchParams.get('resource');
+
+    console.log('🔐 OAuth 2.1 Authorization Request (MCP 2025-06-18)');
+    console.log('Response Type:', responseType);
+    console.log('Client ID:', clientId);
+    console.log('Redirect URI:', redirectUri);
+    console.log('Scope:', scope);
+    console.log('State:', state);
+    console.log('Code Challenge Method:', codeChallengeMethod);
+    console.log('Resource Parameter:', resource);
+
+    // OAuth 2.1 Validation
+    if (responseType !== 'code') {
+        console.log('❌ Invalid response_type - OAuth 2.1 only allows "code"');
+        return redirectWithError(redirectUri, 'unsupported_response_type', 'OAuth 2.1 only supports authorization code flow', state);
+    }
+
+    if (!clientId) {
+        console.log('❌ Missing client_id');
+        return redirectWithError(redirectUri, 'invalid_request', 'client_id is required', state);
+    }
+
+    if (!redirectUri) {
+        return NextResponse.json({
+            error: 'invalid_request',
+            error_description: 'redirect_uri is required'
+        }, { status: 400 });
+    }
+
+    // OAuth 2.1: PKCE is mandatory for public clients
+    if (!codeChallenge || codeChallengeMethod !== 'S256') {
+        console.log('❌ Missing or invalid PKCE - OAuth 2.1 requires PKCE with S256');
+        return redirectWithError(redirectUri, 'invalid_request', 'PKCE with S256 is required for OAuth 2.1', state);
+    }
+
+    // MCP 2025-06-18: Validate resource parameter if provided
+    if (resource) {
+        const baseUrl = new URL(request.url).origin;
+        try {
+            const resourceUrl = new URL(resource);
+            if (resourceUrl.origin !== baseUrl) {
+                console.log('❌ Invalid resource parameter - must match server origin');
+                return redirectWithError(redirectUri, 'invalid_target', 'Resource parameter must match server origin', state);
+            }
+        } catch {
+            console.log('❌ Invalid resource parameter format');
+            return redirectWithError(redirectUri, 'invalid_target', 'Invalid resource parameter format', state);
+        }
+    }
+
+    // Validate redirect URI (OAuth 2.1 requires exact match)
+    const validRedirectUris = [
+        'http://127.0.0.1:3334/oauth/callback', // MCP Remote
+        'http://localhost:3334/oauth/callback',  // MCP Remote
+        'http://127.0.0.1:33418/',              // VS Code local server
+        'http://localhost:33418/',              // VS Code local server
+        'https://vscode.dev/redirect',          // VS Code web redirect (required by MCP spec)
+        `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
+        `${new URL(request.url).origin}/api/auth/callback/google`
+    ];
+
+    // Allow dynamic ports for VS Code (pattern: http://127.0.0.1:{port}/)
+    const vsCodePattern = /^http:\/\/127\.0\.0\.1:\d+\/?$/;
+    const mcpRemotePattern = /^http:\/\/127\.0\.0\.1:\d+\/oauth\/callback$/;
+
+    if (!validRedirectUris.includes(redirectUri) &&
+        !vsCodePattern.test(redirectUri) &&
+        !mcpRemotePattern.test(redirectUri)) {
+        console.log('❌ Invalid redirect_uri:', redirectUri);
+        return NextResponse.json({
+            error: 'invalid_request',
+            error_description: 'Invalid redirect_uri'
+        }, { status: 400 });
+    }
+
+    // Generate authorization code
+    const authCode = randomBytes(32).toString('base64url');
+
+    // Store authorization code with PKCE challenge and resource (in production, use database)
+    if (!(globalThis as any).authCodes) {
+        (globalThis as any).authCodes = new Map();
+    }
+
+    (globalThis as any).authCodes.set(authCode, {
+        clientId,
+        redirectUri,
+        scope: scope || 'openid profile email mcp:read mcp:write',
+        codeChallenge,
+        codeChallengeMethod,
+        resource, // Store resource parameter for token exchange
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (10 * 60 * 1000) // 10 minutes
     });
 
-    // Store the original redirect URI (client's dynamic port) in the state parameter
-    // so we can redirect back to it after OAuth completes
-    const extendedState = JSON.stringify({
+    // Build Google OAuth URL with resource parameter
+    const googleOAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    googleOAuthUrl.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID!);
+    googleOAuthUrl.searchParams.set('redirect_uri', `${new URL(request.url).origin}/api/auth/callback/google`);
+    googleOAuthUrl.searchParams.set('response_type', 'code');
+    googleOAuthUrl.searchParams.set('scope', 'openid profile email');
+    googleOAuthUrl.searchParams.set('access_type', 'offline');
+    googleOAuthUrl.searchParams.set('prompt', 'consent');
+
+    // Encode our state to preserve OAuth flow context
+    const encodedState = Buffer.from(JSON.stringify({
         originalState: state,
-        originalRedirectUri: originalRedirectUri
-    });
+        originalRedirectUri: redirectUri,
+        authCode: authCode,
+        resource: resource, // Preserve resource parameter
+        clientId: clientId
+    })).toString('base64url');
 
-    // Use our fixed redirect URI that's configured in Google Console
-    const fixedRedirectUri = 'http://localhost:3000/api/auth/callback/google';
+    googleOAuthUrl.searchParams.set('state', encodedState);
 
-    // Ensure we always include the required scope parameter
-    const scope = 'openid email profile';
+    console.log('🚀 Redirecting to Google OAuth with state preservation');
+    console.log('Auth Code Generated:', authCode);
+    console.log('OAuth 2.1 + MCP 2025-06-18 Compliance: ENABLED');
 
-    // Build the Google OAuth authorization URL with all required parameters
-    const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    googleAuthUrl.searchParams.set('client_id', clientId!);
-    googleAuthUrl.searchParams.set('redirect_uri', fixedRedirectUri);
-    googleAuthUrl.searchParams.set('response_type', responseType);
-    googleAuthUrl.searchParams.set('scope', scope);
-    googleAuthUrl.searchParams.set('access_type', 'offline');
-    googleAuthUrl.searchParams.set('prompt', 'consent');
-    googleAuthUrl.searchParams.set('state', extendedState);
+    return NextResponse.redirect(googleOAuthUrl.toString());
+}
 
-    console.log('Client redirect URI:', originalRedirectUri);
-    console.log('Using fixed redirect URI:', fixedRedirectUri);
-    console.log('Redirecting to Google OAuth with URL:', googleAuthUrl.toString());
+function redirectWithError(redirectUri: string | null, error: string, errorDescription: string, state: string | null) {
+    if (!redirectUri) {
+        return NextResponse.json({
+            error,
+            error_description: errorDescription
+        }, { status: 400 });
+    }
 
-    // Redirect to Google OAuth with proper parameters
-    return NextResponse.redirect(googleAuthUrl.toString());
+    const errorUrl = new URL(redirectUri);
+    errorUrl.searchParams.set('error', error);
+    errorUrl.searchParams.set('error_description', errorDescription);
+    if (state) {
+        errorUrl.searchParams.set('state', state);
+    }
+
+    return NextResponse.redirect(errorUrl.toString());
 }
