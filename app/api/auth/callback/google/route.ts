@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     try {
         // Parse the extended state to get client's original redirect URI
-        let originalRedirectUri = 'http://localhost:3000'; // fallback
+        let originalRedirectUri = 'http://localhost:3001'; // fallback
         let originalState = '';
         let clientType = 'unknown';
 
@@ -82,6 +82,12 @@ export async function GET(request: NextRequest) {
         });
 
         // Exchange authorization code for tokens
+        // Use the same redirect URI that was used in the authorization request
+        const currentOrigin = new URL(request.url).origin;
+        const redirectUriForTokenExchange = `${currentOrigin}/api/auth/callback/google`;
+
+        console.log('Using redirect URI for token exchange:', redirectUriForTokenExchange);
+
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: {
@@ -92,7 +98,7 @@ export async function GET(request: NextRequest) {
                 client_secret: process.env.GOOGLE_CLIENT_SECRET!,
                 code: code,
                 grant_type: 'authorization_code',
-                redirect_uri: 'http://localhost:3000/api/auth/callback/google',
+                redirect_uri: redirectUriForTokenExchange,
             }),
         });
 
@@ -119,6 +125,28 @@ export async function GET(request: NextRequest) {
         console.log('ID token segments:', tokens.id_token ? tokens.id_token.split('.').length : 0);
         console.log('===============================');
 
+        // Store Google tokens with our authorization code for later exchange
+        let authCode = '';
+        if (stateParam) {
+            try {
+                const decodedState = Buffer.from(stateParam, 'base64url').toString('utf-8');
+                const parsedState = JSON.parse(decodedState);
+                authCode = parsedState.authCode || '';
+
+                // Update our stored authorization code with the Google tokens
+                if (authCode && (globalThis as any).authCodes) {
+                    const authData = (globalThis as any).authCodes.get(authCode);
+                    if (authData) {
+                        authData.googleTokens = tokens;
+                        (globalThis as any).authCodes.set(authCode, authData);
+                        console.log('✅ Stored Google tokens with authorization code:', authCode);
+                    }
+                }
+            } catch (e) {
+                console.log('Could not extract/update auth code from state');
+            }
+        }
+
         // Build the redirect URL back to the client with the appropriate token
         let finalRedirectUrl: string;
 
@@ -143,49 +171,60 @@ export async function GET(request: NextRequest) {
                 finalRedirectUrl = clientRedirectUrl.toString();
                 console.log('Using query parameters for Claude Desktop');
             } else if (clientType === 'vscode-web' && originalRedirectUri === 'https://vscode.dev/redirect') {
-                // VS Code web redirect - redirect to VS Code protocol URL from the original state
+                // VS Code web redirect - use vscode.dev redirect with parameters
                 console.log('Processing VS Code web redirect');
-                console.log('Original state (should contain vscode:// URL):', originalState);
 
-                // The original state contains the VS Code protocol URL
-                if (originalState && originalState.startsWith('vscode')) {
-                    // Decode the VS Code URL and add the token as a parameter
-                    const vsCodeUrl = new URL(originalState);
-                    vsCodeUrl.searchParams.set('access_token', tokens.id_token);
-                    vsCodeUrl.searchParams.set('token_type', 'Bearer');
-                    vsCodeUrl.searchParams.set('expires_in', tokens.expires_in?.toString() || '3600');
+                // Use vscode.dev redirect URL with query parameters (VS Code expects this format)
+                const vsCodeRedirectUrl = new URL('https://vscode.dev/redirect');
 
-                    finalRedirectUrl = vsCodeUrl.toString();
-                    console.log('Redirecting to VS Code protocol URL:', finalRedirectUrl);
-                } else {
-                    console.log('⚠️ No valid VS Code protocol URL in state, using fallback');
-                    // Fallback: redirect to vscode.dev with fragment
-                    const tokenParams = new URLSearchParams({
-                        access_token: tokens.id_token,
-                        token_type: 'Bearer',
-                        expires_in: tokens.expires_in?.toString() || '3600'
-                    });
-                    finalRedirectUrl = `https://vscode.dev/redirect#${tokenParams.toString()}`;
+                // Add VS Code callback parameters
+                vsCodeRedirectUrl.searchParams.set('vscode-scheme', 'vscode');
+                vsCodeRedirectUrl.searchParams.set('vscode-authority', 'ms-vscode.vscode-mcp');
+                vsCodeRedirectUrl.searchParams.set('vscode-path', '/oauth-callback');
+                vsCodeRedirectUrl.searchParams.set('access_token', tokens.id_token);
+                vsCodeRedirectUrl.searchParams.set('token_type', 'Bearer');
+                vsCodeRedirectUrl.searchParams.set('expires_in', tokens.expires_in?.toString() || '3600');
+
+                if (originalState) {
+                    vsCodeRedirectUrl.searchParams.set('state', originalState);
                 }
-                console.log('Using VS Code web redirect');
+
+                finalRedirectUrl = vsCodeRedirectUrl.toString();
+                console.log('Using VS Code web redirect with protocol parameters');
             } else if (clientType === 'vscode-local' && originalRedirectUri.startsWith('http://127.0.0.1:')) {
-                // VS Code local server - use URL fragments (OAuth implicit flow format)
+                // VS Code local server - use authorization code flow (VS Code expects this)
                 const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
+                const vsCodeUrl = new URL(baseUrl);
 
-                const tokenParams = new URLSearchParams({
-                    access_token: tokens.id_token,
-                    token_type: 'Bearer',
-                    expires_in: tokens.expires_in?.toString() || '3600'
-                });
-
-                // Only add state if it exists and is not empty
-                if (originalState && originalState.trim() !== '') {
-                    tokenParams.set('state', originalState);
+                // Extract our stored authorization code from parsed state
+                let authCode = '';
+                if (stateParam) {
+                    try {
+                        const decodedState = Buffer.from(stateParam, 'base64url').toString('utf-8');
+                        const parsedState = JSON.parse(decodedState);
+                        authCode = parsedState.authCode || '';
+                        console.log('Retrieved stored auth code:', authCode);
+                    } catch (e) {
+                        console.log('Could not extract auth code from state');
+                    }
                 }
 
-                finalRedirectUrl = `${baseUrl}#${tokenParams.toString()}`;
-                console.log('Using URL fragments for VS Code local server (OAuth implicit flow format)');
+                // Return our authorization code (not Google's) - VS Code will exchange it with our token endpoint
+                if (authCode) {
+                    vsCodeUrl.searchParams.set('code', authCode);
+                } else {
+                    // Fallback: use Google's code directly
+                    vsCodeUrl.searchParams.set('code', code);
+                }
+
+                if (originalState && originalState.trim() !== '') {
+                    vsCodeUrl.searchParams.set('state', originalState);
+                }
+
+                finalRedirectUrl = vsCodeUrl.toString();
+                console.log('Using authorization code flow for VS Code local server');
                 console.log('VS Code redirect URI preserved:', baseUrl);
+                console.log('Returning authorization code for VS Code to exchange:', authCode || code);
             } else {
                 // ALL other clients use URL fragments (fallback behavior)
                 const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];

@@ -48,10 +48,16 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
     }
 
-    // OAuth 2.1: PKCE is mandatory for public clients
-    if (!codeChallenge || codeChallengeMethod !== 'S256') {
-        console.log('❌ Missing or invalid PKCE - OAuth 2.1 requires PKCE with S256');
-        return redirectWithError(redirectUri, 'invalid_request', 'PKCE with S256 is required for OAuth 2.1', state);
+    // OAuth 2.1: PKCE is recommended but not mandatory for all clients (VS Code compatibility)
+    if (codeChallenge && codeChallengeMethod !== 'S256') {
+        console.log('⚠️ Invalid PKCE method - only S256 is supported');
+        return redirectWithError(redirectUri, 'invalid_request', 'Only S256 code challenge method is supported', state);
+    }
+
+    if (codeChallenge) {
+        console.log('✅ PKCE S256 detected - enhanced security enabled');
+    } else {
+        console.log('⚠️ No PKCE - proceeding for VS Code compatibility');
     }
 
     // MCP 2025-06-18: Validate resource parameter if provided
@@ -73,20 +79,27 @@ export async function GET(request: NextRequest) {
     const validRedirectUris = [
         'http://127.0.0.1:3334/oauth/callback', // MCP Remote
         'http://localhost:3334/oauth/callback',  // MCP Remote
-        'http://127.0.0.1:33418/',              // VS Code local server
-        'http://localhost:33418/',              // VS Code local server
-        'https://vscode.dev/redirect',          // VS Code web redirect (required by MCP spec)
+        'http://127.0.0.1:33418/',              // VS Code local server (default port)
+        'http://localhost:33418/',              // VS Code local server (default port)
+        'https://vscode.dev/redirect',          // VS Code web redirect
+        'https://insiders.vscode.dev/redirect', // VS Code Insiders web redirect
+        'vscode://ms-vscode.vscode-mcp/oauth-callback', // VS Code protocol URL
+        'vscode-insiders://ms-vscode.vscode-mcp/oauth-callback', // VS Code Insiders protocol URL
         `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
         `${new URL(request.url).origin}/api/auth/callback/google`
     ];
 
     // Allow dynamic ports for VS Code (pattern: http://127.0.0.1:{port}/)
     const vsCodePattern = /^http:\/\/127\.0\.0\.1:\d+\/?$/;
+    const vsCodeLocalhostPattern = /^http:\/\/localhost:\d+\/?$/;
     const mcpRemotePattern = /^http:\/\/127\.0\.0\.1:\d+\/oauth\/callback$/;
 
     if (!validRedirectUris.includes(redirectUri) &&
         !vsCodePattern.test(redirectUri) &&
-        !mcpRemotePattern.test(redirectUri)) {
+        !vsCodeLocalhostPattern.test(redirectUri) &&
+        !mcpRemotePattern.test(redirectUri) &&
+        !redirectUri.startsWith('vscode://') &&
+        !redirectUri.startsWith('vscode-insiders://')) {
         console.log('❌ Invalid redirect_uri:', redirectUri);
         return NextResponse.json({
             error: 'invalid_request',

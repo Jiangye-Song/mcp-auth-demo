@@ -1,0 +1,9 @@
+{
+    "chat.mcp.serverSampling": {
+        "mcp-auth-demo/.vscode/mcp.json: hello-mcp": {
+            "allowedModels": [
+                "copilot/gpt-4.1"
+            ]
+        }
+    }
+}
