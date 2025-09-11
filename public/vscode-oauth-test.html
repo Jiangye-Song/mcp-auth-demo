@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>VS Code OAuth Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+        }
+
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+
+        .token-display {
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔐 VS Code OAuth 2.1 Test Flow</h1>
+
+        <div class="step info">
+            <h3>📋 Test OAuth 2.1 + PKCE Flow</h3>
+            <p>This page simulates VS Code's OAuth 2.1 flow with PKCE to test token delivery.</p>
+            <button onclick="startOAuthFlow()">🚀 Start OAuth Flow (with PKCE)</button>
+            <button onclick="startOAuthFlowNoPKCE()">🔧 Start OAuth Flow (no PKCE)</button>
+        </div>
+
+        <div class="step" id="step1" style="display: none;">
+            <h3>📍 Step 1: Authorization Request</h3>
+            <p>Generated PKCE code challenge and redirecting to authorization endpoint...</p>
+            <div id="authUrl"></div>
+        </div>
+
+        <div class="step" id="step2" style="display: none;">
+            <h3>🔑 Step 2: Authorization Code Received</h3>
+            <p>Authorization code received. Now exchanging for tokens...</p>
+            <div id="authCode"></div>
+        </div>
+
+        <div class="step" id="step3" style="display: none;">
+            <h3>🎉 Step 3: Token Exchange</h3>
+            <div id="tokenResult"></div>
+        </div>
+
+        <div class="step warning">
+            <h3>🔍 Debug Information</h3>
+            <div id="debugInfo">
+                <p><strong>Current URL:</strong> <code id="currentUrl"></code></p>
+                <p><strong>URL Parameters:</strong></p>
+                <pre id="urlParams"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update debug info on page load
+        document.getElementById('currentUrl').textContent = window.location.href;
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlParamsObj = Object.fromEntries(urlParams.entries());
+        document.getElementById('urlParams').textContent = JSON.stringify(urlParamsObj, null, 2);
+
+        // Check if we're returning from OAuth callback
+        window.addEventListener('load', function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const error = urlParams.get('error');
+            const state = urlParams.get('state');
+
+            if (error) {
+                showStep('step3');
+                document.getElementById('tokenResult').innerHTML = `
+                    <div style="color: red;">
+                        <h4>❌ OAuth Error</h4>
+                        <p><strong>Error:</strong> ${error}</p>
+                        <p><strong>Description:</strong> ${urlParams.get('error_description') || 'No description'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (code) {
+                showStep('step2');
+                document.getElementById('authCode').innerHTML = `
+                    <p><strong>Authorization Code:</strong> <code>${code.substring(0, 20)}...</code></p>
+                    <p><strong>State:</strong> <code>${state || 'none'}</code></p>
+                `;
+
+                // Exchange code for tokens
+                exchangeCodeForTokens(code, state);
+            }
+        });
+
+        function showStep(stepId) {
+            document.getElementById(stepId).style.display = 'block';
+        }
+
+        // Generate PKCE code verifier and challenge
+        function generateCodeVerifier() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            return btoa(String.fromCharCode.apply(null, array))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        async function generateCodeChallenge(codeVerifier) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(codeVerifier);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return btoa(String.fromCharCode(...new Uint8Array(digest)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        async function startOAuthFlow() {
+            showStep('step1');
+
+            // Generate PKCE parameters
+            const codeVerifier = generateCodeVerifier();
+            const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+            // Store code verifier for later use
+            sessionStorage.setItem('codeVerifier', codeVerifier);
+            sessionStorage.setItem('usePKCE', 'true');
+
+            // Build OAuth authorization URL
+            const authUrl = new URL('/api/auth/authorize', window.location.origin);
+            authUrl.searchParams.set('response_type', 'code');
+            authUrl.searchParams.set('client_id', 'vscode-test-client');
+            authUrl.searchParams.set('redirect_uri', window.location.href.split('?')[0]);
+            authUrl.searchParams.set('scope', 'openid profile email');
+            authUrl.searchParams.set('state', 'test-state-' + Date.now());
+            authUrl.searchParams.set('code_challenge', codeChallenge);
+            authUrl.searchParams.set('code_challenge_method', 'S256');
+
+            document.getElementById('authUrl').innerHTML = `
+                <p><strong>Authorization URL:</strong></p>
+                <pre>${authUrl.toString()}</pre>
+                <p><strong>Code Verifier:</strong> <code>${codeVerifier}</code></p>
+                <p><strong>Code Challenge:</strong> <code>${codeChallenge}</code></p>
+            `;
+
+            // Redirect to authorization endpoint
+            window.location.href = authUrl.toString();
+        }
+
+        async function startOAuthFlowNoPKCE() {
+            showStep('step1');
+
+            sessionStorage.setItem('usePKCE', 'false');
+
+            // Build OAuth authorization URL without PKCE
+            const authUrl = new URL('/api/auth/authorize', window.location.origin);
+            authUrl.searchParams.set('response_type', 'code');
+            authUrl.searchParams.set('client_id', 'vscode-test-client');
+            authUrl.searchParams.set('redirect_uri', window.location.href.split('?')[0]);
+            authUrl.searchParams.set('scope', 'openid profile email');
+            authUrl.searchParams.set('state', 'test-state-no-pkce-' + Date.now());
+
+            document.getElementById('authUrl').innerHTML = `
+                <p><strong>Authorization URL (No PKCE):</strong></p>
+                <pre>${authUrl.toString()}</pre>
+            `;
+
+            // Redirect to authorization endpoint
+            window.location.href = authUrl.toString();
+        }
+
+        async function exchangeCodeForTokens(code, state) {
+            showStep('step3');
+
+            try {
+                const usePKCE = sessionStorage.getItem('usePKCE') === 'true';
+                const codeVerifier = sessionStorage.getItem('codeVerifier');
+
+                const tokenRequest = new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code: code,
+                    redirect_uri: window.location.href.split('?')[0],
+                    client_id: 'vscode-test-client'
+                });
+
+                if (usePKCE && codeVerifier) {
+                    tokenRequest.set('code_verifier', codeVerifier);
+                }
+
+                const response = await fetch('/api/auth/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: tokenRequest.toString()
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('tokenResult').innerHTML = `
+                        <div style="color: green;">
+                            <h4>✅ Token Exchange Successful!</h4>
+                            <p><strong>Access Token:</strong> <code class="token-display">${result.access_token?.substring(0, 50)}...</code></p>
+                            <p><strong>Token Type:</strong> <code>${result.token_type}</code></p>
+                            <p><strong>Expires In:</strong> <code>${result.expires_in}</code> seconds</p>
+                            <p><strong>Scope:</strong> <code>${result.scope}</code></p>
+                            ${result.id_token ? `<p><strong>ID Token:</strong> <code class="token-display">${result.id_token.substring(0, 50)}...</code></p>` : ''}
+                            ${result.refresh_token ? `<p><strong>Refresh Token:</strong> <code class="token-display">${result.refresh_token.substring(0, 50)}...</code></p>` : ''}
+                        </div>
+                        <h4>🔍 Full Response:</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('tokenResult').innerHTML = `
+                        <div style="color: red;">
+                            <h4>❌ Token Exchange Failed</h4>
+                            <p><strong>Error:</strong> ${result.error}</p>
+                            <p><strong>Description:</strong> ${result.error_description}</p>
+                            <h4>🔍 Full Response:</h4>
+                            <pre>${JSON.stringify(result, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+
+                // Clean up
+                sessionStorage.removeItem('codeVerifier');
+                sessionStorage.removeItem('usePKCE');
+
+            } catch (error) {
+                document.getElementById('tokenResult').innerHTML = `
+                    <div style="color: red;">
+                        <h4>❌ Network Error</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+
+</html>

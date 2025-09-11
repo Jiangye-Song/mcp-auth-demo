@@ -1,113 +1,235 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 
 /**
- * Custom OAuth token endpoint that handles token exchange for mcp-remote
- * This endpoint receives token exchange requests from mcp-remote and forwards them
- * to Google OAuth with the correct redirect_uri parameter
+ * OAuth 2.1 Token Endpoint for VS Code MCP Authentication
+ * Implements authorization code exchange with PKCE verification
  */
 export async function POST(request: NextRequest) {
+    console.log('🔑 Token Exchange Request - ', new Date().toISOString());
+
     try {
         const body = await request.text();
-        const tokenParams = new URLSearchParams(body);
+        const params = new URLSearchParams(body);
 
-        console.log('Token exchange request received:', {
-            grant_type: tokenParams.get('grant_type'),
-            code: tokenParams.get('code') ? `${tokenParams.get('code')?.substring(0, 20)}...` : 'missing',
-            redirect_uri: tokenParams.get('redirect_uri'),
-            code_verifier: tokenParams.get('code_verifier') ? 'present' : 'missing',
-            client_id: tokenParams.get('client_id') ? 'present' : 'missing'
-        });
+        // Extract token request parameters
+        const grantType = params.get('grant_type');
+        const code = params.get('code');
+        const redirectUri = params.get('redirect_uri');
+        const clientId = params.get('client_id');
+        const codeVerifier = params.get('code_verifier');
 
-        // Get the production URL from Vercel environment or construct from request
-        const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-            : new URL(request.url).origin;
+        console.log('Token request parameters:');
+        console.log('Grant Type:', grantType);
+        console.log('Code:', code ? 'present' : 'missing');
+        console.log('Redirect URI:', redirectUri);
+        console.log('Client ID:', clientId);
+        console.log('Code Verifier:', codeVerifier ? 'present' : 'missing');
 
-        // Create the token request for Google OAuth
-        const googleTokenParams = new URLSearchParams({
-            client_id: process.env.GOOGLE_CLIENT_ID!,
-            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-            code: tokenParams.get('code') || '',
-            grant_type: 'authorization_code',
-            // Use our production server redirect_uri (the one used in authorization)
-            redirect_uri: `${productionUrl}/oauth/callback`,
-        });
-
-        // Add PKCE code_verifier if provided
-        const codeVerifier = tokenParams.get('code_verifier');
-        if (codeVerifier) {
-            googleTokenParams.append('code_verifier', codeVerifier);
-            console.log('Added code_verifier for PKCE flow');
+        // Validate grant type
+        if (grantType !== 'authorization_code') {
+            console.log('❌ Invalid grant_type');
+            return NextResponse.json({
+                error: 'unsupported_grant_type',
+                error_description: 'Only authorization_code grant type is supported'
+            }, { status: 400 });
         }
 
-        console.log('Forwarding token exchange to Google OAuth with:', {
-            client_id: process.env.GOOGLE_CLIENT_ID?.substring(0, 10) + '...',
-            redirect_uri: `${productionUrl}/oauth/callback`,
-            code_present: !!tokenParams.get('code'),
-            code_verifier_present: !!codeVerifier
-        });
+        // Validate required parameters
+        if (!code) {
+            console.log('❌ Missing authorization code');
+            return NextResponse.json({
+                error: 'invalid_request',
+                error_description: 'Missing authorization code'
+            }, { status: 400 });
+        }
 
-        // Exchange the authorization code with Google OAuth
+        if (!redirectUri) {
+            console.log('❌ Missing redirect_uri');
+            return NextResponse.json({
+                error: 'invalid_request',
+                error_description: 'Missing redirect_uri'
+            }, { status: 400 });
+        }
+
+        // Retrieve stored authorization code data
+        const authCodes = (globalThis as any).authCodes || new Map();
+        const authData = authCodes.get(code);
+
+        if (!authData) {
+            console.log('❌ Invalid or expired authorization code');
+            return NextResponse.json({
+                error: 'invalid_grant',
+                error_description: 'Invalid or expired authorization code'
+            }, { status: 400 });
+        }
+
+        // Check if code has expired (10 minutes)
+        if (Date.now() > authData.expiresAt) {
+            console.log('❌ Authorization code expired');
+            authCodes.delete(code);
+            return NextResponse.json({
+                error: 'invalid_grant',
+                error_description: 'Authorization code expired'
+            }, { status: 400 });
+        }
+
+        // Validate redirect URI matches
+        if (authData.redirectUri !== redirectUri) {
+            console.log('❌ Redirect URI mismatch');
+            return NextResponse.json({
+                error: 'invalid_grant',
+                error_description: 'Redirect URI does not match'
+            }, { status: 400 });
+        }
+
+        // Validate client ID if provided
+        if (clientId && authData.clientId !== clientId) {
+            console.log('❌ Client ID mismatch');
+            return NextResponse.json({
+                error: 'invalid_client',
+                error_description: 'Client ID does not match'
+            }, { status: 400 });
+        }
+
+        // PKCE verification if code challenge was provided
+        if (authData.codeChallenge) {
+            if (!codeVerifier) {
+                console.log('❌ Missing code verifier for PKCE');
+                return NextResponse.json({
+                    error: 'invalid_request',
+                    error_description: 'Code verifier required for PKCE'
+                }, { status: 400 });
+            }
+
+            // Verify PKCE S256
+            const computedChallenge = createHash('sha256')
+                .update(codeVerifier)
+                .digest('base64url');
+
+            if (computedChallenge !== authData.codeChallenge) {
+                console.log('❌ PKCE verification failed');
+                return NextResponse.json({
+                    error: 'invalid_grant',
+                    error_description: 'PKCE verification failed'
+                }, { status: 400 });
+            }
+
+            console.log('✅ PKCE verification successful');
+        }
+
+        // Check if we have stored Google tokens for this authorization code
+        if (authData.googleTokens) {
+            console.log('✅ Using stored Google tokens for authorization code');
+            const googleTokens = authData.googleTokens;
+
+            // Clean up used authorization code
+            authCodes.delete(code);
+
+            // Return OAuth 2.1 compliant token response
+            const tokenResponseData: any = {
+                access_token: googleTokens.id_token || googleTokens.access_token,
+                token_type: 'Bearer',
+                expires_in: googleTokens.expires_in || 3600,
+                scope: authData.scope || 'openid profile email'
+            };
+
+            // Include refresh token if available
+            if (googleTokens.refresh_token) {
+                tokenResponseData.refresh_token = googleTokens.refresh_token;
+            }
+
+            // Include ID token if available (for OpenID Connect)
+            if (googleTokens.id_token) {
+                tokenResponseData.id_token = googleTokens.id_token;
+            }
+
+            console.log('🎉 Token exchange completed successfully (stored tokens)');
+            console.log('Scope:', tokenResponseData.scope);
+            console.log('Expires in:', tokenResponseData.expires_in);
+
+            return NextResponse.json(tokenResponseData);
+        }
+
+        // Fallback: Exchange authorization code for Google tokens (shouldn't happen with new flow)
+        console.log('⚠️ No stored tokens - attempting direct Google exchange (fallback)');
+
+        // Exchange authorization code for Google tokens
+        console.log('🔄 Exchanging authorization code with Google...');
+
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: googleTokenParams,
+            body: new URLSearchParams({
+                client_id: process.env.GOOGLE_CLIENT_ID!,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+                code: code,
+                grant_type: 'authorization_code',
+                redirect_uri: `${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/auth/callback/google`,
+            }),
         });
 
         if (!tokenResponse.ok) {
             const errorData = await tokenResponse.text();
-            console.error('Google token exchange failed:', errorData);
-
-            return new Response(errorData, {
-                status: tokenResponse.status,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                },
-            });
+            console.error('❌ Google token exchange failed:', errorData);
+            return NextResponse.json({
+                error: 'server_error',
+                error_description: 'Failed to exchange authorization code with Google',
+                details: errorData
+            }, { status: 500 });
         }
 
-        const tokens = await tokenResponse.json();
-        console.log('✅ Token exchange successful');
+        const googleTokens = await tokenResponse.json();
+        console.log('✅ Google token exchange successful');
+        console.log('Received tokens:', Object.keys(googleTokens));
 
-        // Return the tokens to mcp-remote
-        return new Response(JSON.stringify(tokens), {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            },
-        });
+        // Clean up used authorization code
+        authCodes.delete(code);
+
+        // Return OAuth 2.1 compliant token response
+        const tokenResponseData: any = {
+            access_token: googleTokens.id_token || googleTokens.access_token,
+            token_type: 'Bearer',
+            expires_in: googleTokens.expires_in || 3600,
+            scope: authData.scope || 'openid profile email'
+        };
+
+        // Include refresh token if available
+        if (googleTokens.refresh_token) {
+            tokenResponseData.refresh_token = googleTokens.refresh_token;
+        }
+
+        // Include ID token if available (for OpenID Connect)
+        if (googleTokens.id_token) {
+            tokenResponseData.id_token = googleTokens.id_token;
+        }
+
+        console.log('🎉 Token exchange completed successfully');
+        console.log('Scope:', tokenResponseData.scope);
+        console.log('Expires in:', tokenResponseData.expires_in);
+
+        return NextResponse.json(tokenResponseData);
 
     } catch (error) {
-        console.error('Token exchange error:', error);
-
-        return new Response(JSON.stringify({
-            error: 'token_exchange_failed',
-            error_description: 'Failed to exchange authorization code for tokens',
+        console.error('❌ Error in token endpoint:', error);
+        return NextResponse.json({
+            error: 'server_error',
+            error_description: 'Internal server error during token exchange',
             details: error instanceof Error ? error.message : String(error)
-        }), {
-            status: 500,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-            },
-        });
+        }, { status: 500 });
     }
 }
 
+// Handle preflight OPTIONS requests
 export async function OPTIONS(request: NextRequest) {
-    return new Response(null, {
+    return new NextResponse(null, {
         status: 200,
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            'Access-Control-Max-Age': '86400',
         },
     });
 }

@@ -28,27 +28,51 @@ export async function GET(request: NextRequest) {
 
     try {
         // Parse the extended state to get client's original redirect URI
-        let originalRedirectUri = 'http://localhost:3000'; // fallback
+        let originalRedirectUri = 'http://localhost:3001'; // fallback
         let originalState = '';
         let clientType = 'unknown';
 
         if (stateParam) {
             try {
-                const parsedState = JSON.parse(stateParam);
+                console.log('Raw state parameter:', stateParam);
+                console.log('Attempting to decode base64url state...');
+
+                // Decode base64url-encoded state
+                const decodedState = Buffer.from(stateParam, 'base64url').toString('utf-8');
+                console.log('Decoded state:', decodedState);
+
+                const parsedState = JSON.parse(decodedState);
+                console.log('Parsed state object:', parsedState);
+
                 originalRedirectUri = parsedState.originalRedirectUri || originalRedirectUri;
                 originalState = parsedState.originalState || '';
 
                 // Detect client type based on redirect URI pattern
                 if (originalRedirectUri.includes('oauth/callback')) {
-                    clientType = 'claude-desktop';
-                } else if (originalRedirectUri.includes('vscode-generated')) {
-                    clientType = 'vscode';
+                    // MCP Remote (mcp-remote tool) and Claude Desktop both use /oauth/callback pattern
+                    clientType = 'mcp-remote';
+                } else if (originalRedirectUri.includes('vscode.dev/redirect')) {
+                    clientType = 'vscode-web';
+                } else if (originalRedirectUri.startsWith('http://127.0.0.1:') ||
+                    originalRedirectUri.startsWith('http://localhost:')) {
+                    clientType = 'vscode-local'; // VS Code's temporary OAuth server
                 } else {
                     clientType = 'generic';
                 }
+
+                console.log('Detected client type:', clientType);
             } catch (e) {
-                console.log('Could not parse state, using as-is');
-                originalState = stateParam;
+                console.log('Could not decode/parse state, trying direct JSON parse...');
+                try {
+                    const parsedState = JSON.parse(stateParam);
+                    originalRedirectUri = parsedState.originalRedirectUri || originalRedirectUri;
+                    originalState = parsedState.originalState || '';
+                    clientType = 'legacy-format';
+                } catch (e2) {
+                    console.log('Parse error:', e);
+                    originalState = stateParam;
+                    clientType = 'fallback';
+                }
             }
         }
 
@@ -59,6 +83,12 @@ export async function GET(request: NextRequest) {
         });
 
         // Exchange authorization code for tokens
+        // Use the same redirect URI that was used in the authorization request
+        const currentOrigin = new URL(request.url).origin;
+        const redirectUriForTokenExchange = `${currentOrigin}/api/auth/callback/google`;
+
+        console.log('Using redirect URI for token exchange:', redirectUriForTokenExchange);
+
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: {
@@ -69,7 +99,7 @@ export async function GET(request: NextRequest) {
                 client_secret: process.env.GOOGLE_CLIENT_SECRET!,
                 code: code,
                 grant_type: 'authorization_code',
-                redirect_uri: 'http://localhost:3000/api/auth/callback/google',
+                redirect_uri: redirectUriForTokenExchange,
             }),
         });
 
@@ -96,46 +126,152 @@ export async function GET(request: NextRequest) {
         console.log('ID token segments:', tokens.id_token ? tokens.id_token.split('.').length : 0);
         console.log('===============================');
 
+        // Store Google tokens with our authorization code for later exchange
+        let authCode = '';
+        if (stateParam) {
+            try {
+                const decodedState = Buffer.from(stateParam, 'base64url').toString('utf-8');
+                const parsedState = JSON.parse(decodedState);
+                authCode = parsedState.authCode || '';
+
+                // Update our stored authorization code with the Google tokens
+                if (authCode && (globalThis as any).authCodes) {
+                    const authData = (globalThis as any).authCodes.get(authCode);
+                    if (authData) {
+                        authData.googleTokens = tokens;
+                        (globalThis as any).authCodes.set(authCode, authData);
+                        console.log('✅ Stored Google tokens with authorization code:', authCode);
+                    }
+                }
+            } catch (e) {
+                console.log('Could not extract/update auth code from state');
+            }
+        }
+
         // Build the redirect URL back to the client with the appropriate token
-        const clientRedirectUrl = new URL(originalRedirectUri);
+        let finalRedirectUrl: string;
+
+        console.log('=== REDIRECT URL CONSTRUCTION ===');
+        console.log('Client type:', clientType);
+        console.log('Original redirect URI:', originalRedirectUri);
+        console.log('Original state:', originalState);
 
         if (tokens.id_token) {
-            // Different clients expect different token formats
-            if (clientType === 'claude-desktop') {
-                // Claude Desktop typically expects access tokens
-                clientRedirectUrl.searchParams.set('access_token', tokens.access_token);
-                clientRedirectUrl.searchParams.set('id_token', tokens.id_token);
-                clientRedirectUrl.searchParams.set('token_type', 'Bearer');
-                console.log('Adding both access and ID tokens for Claude Desktop');
-            } else {
-                // VS Code and others expect ID token as access_token parameter
-                clientRedirectUrl.searchParams.set('access_token', tokens.id_token);
-                clientRedirectUrl.searchParams.set('token_type', 'Bearer');
-                console.log('Adding ID token as access_token for VS Code/generic client');
-            }
+            if (clientType === 'mcp-remote') {
+                // MCP Remote expects authorization code flow (like VS Code)
+                const clientRedirectUrl = new URL(originalRedirectUri);
 
-            if (tokens.expires_in) {
-                clientRedirectUrl.searchParams.set('expires_in', tokens.expires_in.toString());
+                // Return our authorization code (not Google's tokens directly)
+                if (authCode) {
+                    clientRedirectUrl.searchParams.set('code', authCode);
+                } else {
+                    // Fallback: use Google's code directly
+                    clientRedirectUrl.searchParams.set('code', code);
+                }
+
+                if (originalState) {
+                    clientRedirectUrl.searchParams.set('state', originalState);
+                }
+
+                finalRedirectUrl = clientRedirectUrl.toString();
+                console.log('Using authorization code flow for MCP Remote');
+                console.log('Returning authorization code for MCP Remote to exchange:', authCode || code);
+            } else if (clientType === 'vscode-web' && originalRedirectUri === 'https://vscode.dev/redirect') {
+                // VS Code web redirect - use vscode.dev redirect with parameters
+                console.log('Processing VS Code web redirect');
+
+                // Use vscode.dev redirect URL with query parameters (VS Code expects this format)
+                const vsCodeRedirectUrl = new URL('https://vscode.dev/redirect');
+
+                // Add VS Code callback parameters
+                vsCodeRedirectUrl.searchParams.set('vscode-scheme', 'vscode');
+                vsCodeRedirectUrl.searchParams.set('vscode-authority', 'ms-vscode.vscode-mcp');
+                vsCodeRedirectUrl.searchParams.set('vscode-path', '/oauth-callback');
+                vsCodeRedirectUrl.searchParams.set('access_token', tokens.id_token);
+                vsCodeRedirectUrl.searchParams.set('token_type', 'Bearer');
+                vsCodeRedirectUrl.searchParams.set('expires_in', tokens.expires_in?.toString() || '3600');
+
+                if (originalState) {
+                    vsCodeRedirectUrl.searchParams.set('state', originalState);
+                }
+
+                finalRedirectUrl = vsCodeRedirectUrl.toString();
+                console.log('Using VS Code web redirect with protocol parameters');
+            } else if (clientType === 'vscode-local' && originalRedirectUri.startsWith('http://127.0.0.1:')) {
+                // VS Code local server - use authorization code flow (VS Code expects this)
+                const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
+                const vsCodeUrl = new URL(baseUrl);
+
+                // Extract our stored authorization code from parsed state
+                let authCode = '';
+                if (stateParam) {
+                    try {
+                        const decodedState = Buffer.from(stateParam, 'base64url').toString('utf-8');
+                        const parsedState = JSON.parse(decodedState);
+                        authCode = parsedState.authCode || '';
+                        console.log('Retrieved stored auth code:', authCode);
+                    } catch (e) {
+                        console.log('Could not extract auth code from state');
+                    }
+                }
+
+                // Return our authorization code (not Google's) - VS Code will exchange it with our token endpoint
+                if (authCode) {
+                    vsCodeUrl.searchParams.set('code', authCode);
+                } else {
+                    // Fallback: use Google's code directly
+                    vsCodeUrl.searchParams.set('code', code);
+                }
+
+                if (originalState && originalState.trim() !== '') {
+                    vsCodeUrl.searchParams.set('state', originalState);
+                }
+
+                finalRedirectUrl = vsCodeUrl.toString();
+                console.log('Using authorization code flow for VS Code local server');
+                console.log('VS Code redirect URI preserved:', baseUrl);
+                console.log('Returning authorization code for VS Code to exchange:', authCode || code);
+            } else {
+                // ALL other clients use URL fragments (fallback behavior)
+                const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
+
+                const tokenParams = new URLSearchParams({
+                    access_token: tokens.id_token,
+                    token_type: 'Bearer',
+                    expires_in: tokens.expires_in?.toString() || '3600'
+                });
+
+                // Only add state if it exists and is not empty
+                if (originalState && originalState.trim() !== '') {
+                    tokenParams.set('state', originalState);
+                }
+
+                finalRedirectUrl = `${baseUrl}#${tokenParams.toString()}`;
+                console.log(`Using URL fragments for ${clientType} client`);
             }
 
             console.log('Token is JWT format:', tokens.id_token.split('.').length === 3);
+            console.log('State being returned:', originalState);
         } else {
             console.error('No ID token received from Google');
             console.log('Available tokens:', Object.keys(tokens));
-            clientRedirectUrl.searchParams.set('error', 'no_id_token');
-            clientRedirectUrl.searchParams.set('error_description', 'No ID token received from Google');
+
+            const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
+            const errorParams = new URLSearchParams({
+                error: 'no_id_token',
+                error_description: 'No ID token received from Google'
+            });
+            finalRedirectUrl = `${baseUrl}#${errorParams.toString()}`;
         }
 
-        if (originalState) {
-            clientRedirectUrl.searchParams.set('state', originalState);
-        }
+        console.log('==================================');
 
         console.log(`Final ${clientType} redirect URL (token masked):`,
-            clientRedirectUrl.toString().replace(tokens.id_token || '', '[ID_TOKEN_MASKED]')
+            finalRedirectUrl.replace(tokens.id_token || '', '[ID_TOKEN_MASKED]')
                 .replace(tokens.access_token || '', '[ACCESS_TOKEN_MASKED]'));
 
         // Redirect back to the client with the appropriate tokens
-        return NextResponse.redirect(clientRedirectUrl.toString());
+        return NextResponse.redirect(finalRedirectUrl);
 
     } catch (err) {
         console.error('Error in OAuth callback:', err);

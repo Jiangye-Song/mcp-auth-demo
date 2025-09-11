@@ -18,7 +18,7 @@ export async function GET(req: Request) {
         // Authorization endpoint - use our custom endpoint
         authorization_endpoint: `${origin}/api/auth/authorize`,
 
-        // Token endpoint - our custom endpoint that handles redirect_uri correctly
+        // Token endpoint - use our custom endpoint for VS Code compatibility
         token_endpoint: `${origin}/api/auth/token`,
 
         // Dynamic client registration endpoint - our custom endpoint
