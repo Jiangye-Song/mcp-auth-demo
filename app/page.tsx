@@ -167,9 +167,8 @@ export default function Home() {
     <button
       type="button"
       onClick={() => setActiveTab(id)}
-      className={`nav-button ${
-        activeTab === id ? "active" : "inactive"
-      }`}
+      className={`nav-button ${activeTab === id ? "active" : "inactive"
+        }`}
     >
       {label}
     </button>
@@ -226,7 +225,7 @@ export default function Home() {
               {/* Quick Test Section */}
               <div className="test-container">
                 <h3 className="test-title">Live Server Testing</h3>
-                
+
                 {/* Test Buttons */}
                 <div className="test-buttons">
                   <button
@@ -237,7 +236,7 @@ export default function Home() {
                   >
                     {loading ? "Testing..." : "Test Server Action"}
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={handleTestUnauthenticated}
@@ -353,7 +352,7 @@ export default function Home() {
             <div>
               <h2 className="section-title">{content.tools.title}</h2>
               <p className="section-description">{content.tools.description}</p>
-              
+
               <div className="component-grid">
                 {content.tools.list.map((tool) => (
                   <div key={tool.name} className="component-card">
@@ -395,12 +394,12 @@ export default function Home() {
           {activeTab === "integration" && (
             <div>
               <h2 className="section-title">Integration Guide</h2>
-              
+
               {/* VS Code Setup */}
               <div className="mb-8">
                 <h3 className="component-title text-2xl mb-4">{content.integrations.vsCode.title}</h3>
                 <p className="section-description">{content.integrations.vsCode.description}</p>
-                
+
                 <div className="steps-container">
                   {content.integrations.vsCode.steps.map((step) => (
                     <div key={step.step} className="step-item">
@@ -422,7 +421,7 @@ export default function Home() {
               <div>
                 <h3 className="component-title text-2xl mb-4">{content.integrations.claudeDesktop.title}</h3>
                 <p className="section-description">{content.integrations.claudeDesktop.description}</p>
-                
+
                 <div className="steps-container">
                   {content.integrations.claudeDesktop.steps.map((step) => (
                     <div key={step.step} className="step-item">
