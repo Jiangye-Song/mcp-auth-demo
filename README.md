@@ -218,7 +218,6 @@ curl -X POST http://localhost:3000/api/mcp \
 ```
 
 ### Development Tools
-- **OAuth Testing**: `test-vscode-oauth.html` - Debug authentication flows
 - **MCP Remote**: Command-line MCP client with automatic OAuth handling
 - **VS Code Extension**: Interactive MCP development environment
 
