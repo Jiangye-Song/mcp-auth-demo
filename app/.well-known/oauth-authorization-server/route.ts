@@ -1,10 +1,14 @@
 /**
- * OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414)
+ * OAuth 2.1 Authorization Server Metadata endpoint (RFC 8414)
  *
- * This endpoint provides information about our OAuth authorization server
+ * This endpoint provides information about our OAuth 2.1 authorization server
  * capabilities, including dynamic client registration support.
  *
+ * OAuth 2.1 Compliance: Only supports authorization code flow with query parameters.
+ * Hash fragment patterns and implicit flow are not supported.
+ *
  * @see https://datatracker.ietf.org/doc/html/rfc8414
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1
  */
 
 import { resolveApiDomain } from "../../../lib/url-resolver";
@@ -28,11 +32,21 @@ export async function GET(_req: Request) {
     // Supported scopes
     scopes_supported: ["openid", "email", "profile"],
 
-    // Supported response types
+    // Supported response types (OAuth 2.1 - authorization code only)
     response_types_supported: ["code"],
 
-    // Supported grant types
+    // Supported response modes (OAuth 2.1 - query parameters only)
+    response_modes_supported: ["query"],
+
+    // Supported grant types (OAuth 2.1 - authorization code only)
     grant_types_supported: ["authorization_code"],
+
+    // OAuth 2.1 compliance indicator
+    oauth_compliance_version: "OAuth 2.1",
+
+    // OAuth 2.1 security requirements
+    require_request_uri_registration: false,
+    require_signed_request_object: false,
 
     // Token endpoint authentication methods
     token_endpoint_auth_methods_supported: [
