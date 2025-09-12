@@ -127,6 +127,7 @@ export async function GET(request: NextRequest) {
     JSON.stringify({
       authCode,
       originalState: state || "",
+      originalRedirectUri: redirectUri || "",
       resource: resource || `${baseUrl}/api/mcp`,
     }),
   ).toString("base64url");
