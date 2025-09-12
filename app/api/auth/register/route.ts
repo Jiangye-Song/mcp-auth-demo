@@ -1,3 +1,4 @@
+import { CORS_CONFIGS, createOPTIONSResponse } from "@/lib/oauth-utils";
 import { resolveApiDomain } from "@/lib/url-resolver";
 
 /**
@@ -125,13 +126,5 @@ export async function POST(req: Request) {
 }
 
 export async function OPTIONS(_req: Request) {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Max-Age": "86400",
-    },
-  });
+  return createOPTIONSResponse(CORS_CONFIGS.api);
 }

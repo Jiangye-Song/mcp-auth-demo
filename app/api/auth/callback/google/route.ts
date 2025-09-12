@@ -1,43 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  createOAuth21ErrorRedirect,
+  createOAuth21ErrorResponse,
+} from "../../../../../lib/oauth-utils";
 import { resolveApiDomain } from "../../../../../lib/url-resolver";
 import "../../../../../lib/auth-types"; // Import shared types
-
-// OAuth 2.1 compliant error handling
-function redirectWithOAuth21Error(
-  redirectUri: string | null,
-  error: string,
-  errorDescription: string,
-  state: string | null,
-) {
-  if (!redirectUri) {
-    return NextResponse.json(
-      {
-        error,
-        error_description: errorDescription,
-        oauth_version: "2.1",
-        compliance_note:
-          "This server only supports OAuth 2.1 authorization code flow",
-      },
-      { status: 400 },
-    );
-  }
-
-  const errorUrl = new URL(redirectUri);
-  errorUrl.searchParams.set("error", error);
-  errorUrl.searchParams.set("error_description", errorDescription);
-
-  if (state) {
-    errorUrl.searchParams.set("state", state);
-  }
-
-  // Add OAuth 2.1 compliance headers
-  return NextResponse.redirect(errorUrl.toString(), {
-    headers: {
-      "OAuth-Version": "2.1",
-      "Cache-Control": "no-store",
-    },
-  });
-}
 
 export async function GET(request: NextRequest) {
   console.log("🔥 OAUTH CALLBACK HIT 🔥 - ", new Date().toISOString());
@@ -57,20 +24,14 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error("OAuth error:", error);
-    return NextResponse.json(
-      { error, error_description: "OAuth authorization failed" },
-      { status: 400 },
-    );
+    return createOAuth21ErrorResponse(error, "OAuth authorization failed");
   }
 
   if (!code) {
     console.error("No authorization code received");
-    return NextResponse.json(
-      {
-        error: "invalid_request",
-        error_description: "No authorization code received",
-      },
-      { status: 400 },
+    return createOAuth21ErrorResponse(
+      "invalid_request",
+      "No authorization code received",
     );
   }
 
@@ -128,7 +89,7 @@ export async function GET(request: NextRequest) {
             "❌ OAuth 2.1 Compliance: Unsupported client redirect URI:",
             originalRedirectUri,
           );
-          return redirectWithOAuth21Error(
+          return createOAuth21ErrorRedirect(
             originalRedirectUri,
             "invalid_client",
             "Client redirect URI not supported for OAuth 2.1 compliance",
@@ -186,13 +147,11 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
       console.error("Token exchange failed:", errorData);
-      return NextResponse.json(
-        {
-          error: "token_exchange_failed",
-          error_description: "Failed to exchange authorization code for tokens",
-          details: errorData,
-        },
-        { status: 500 },
+      return createOAuth21ErrorResponse(
+        "token_exchange_failed",
+        "Failed to exchange authorization code for tokens",
+        500,
+        { details: errorData },
       );
     }
 
@@ -361,7 +320,7 @@ export async function GET(request: NextRequest) {
         );
         console.error("Redirect URI:", originalRedirectUri);
 
-        return redirectWithOAuth21Error(
+        return createOAuth21ErrorRedirect(
           originalRedirectUri,
           "unsupported_response_type",
           "OAuth 2.1 only supports authorization code flow with query parameters",
@@ -401,24 +360,12 @@ export async function GET(request: NextRequest) {
     console.error("Error in OAuth callback:", err);
 
     // Return OAuth 2.1 compliant error information
-    return NextResponse.json(
+    return createOAuth21ErrorResponse(
+      "server_error",
+      "Error processing OAuth 2.1 callback",
+      500,
       {
-        error: "server_error",
-        error_description: "Error processing OAuth 2.1 callback",
-        oauth_version: "2.1",
         details: err instanceof Error ? err.message : String(err),
-        received: {
-          code: code ? "present" : "missing",
-          error,
-          state: stateParam,
-        },
-      },
-      {
-        status: 500,
-        headers: {
-          "OAuth-Version": "2.1",
-          "Cache-Control": "no-store",
-        },
       },
     );
   }

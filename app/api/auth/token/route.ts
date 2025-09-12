@@ -1,6 +1,16 @@
 import { createHash } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
-import type { TokenResponse } from "../../../../lib/auth-types";
+import type { AuthCodeData, GoogleTokens } from "../../../../lib/auth-types";
+import {
+  buildTokenResponse,
+  CORS_CONFIGS,
+  createOAuth21ErrorResponse,
+  createOPTIONSResponse,
+  exchangeCodeForGoogleTokens,
+  normalizeRedirectUri,
+  OAuthLogger,
+  validateTokenParams,
+} from "../../../../lib/oauth-utils";
 import { resolveApiDomain } from "../../../../lib/url-resolver";
 import "../../../../lib/auth-types"; // Import shared types
 
@@ -9,135 +19,97 @@ import "../../../../lib/auth-types"; // Import shared types
  * Implements authorization code exchange with PKCE verification
  */
 export async function POST(request: NextRequest) {
-  console.log("🔑 Token Exchange Request - ", new Date().toISOString());
-
   try {
     const body = await request.text();
     const params = new URLSearchParams(body);
 
     // Extract token request parameters
-    const grantType = params.get("grant_type");
-    const code = params.get("code");
-    const redirectUri = params.get("redirect_uri");
-    const clientId = params.get("client_id");
-    const codeVerifier = params.get("code_verifier");
+    const tokenParams = {
+      grant_type: params.get("grant_type"),
+      code: params.get("code"),
+      redirect_uri: params.get("redirect_uri"),
+      client_id: params.get("client_id"),
+      code_verifier: params.get("code_verifier"),
+    };
 
-    console.log("Token request parameters:");
-    console.log("Grant Type:", grantType);
-    console.log("Code:", code ? "present" : "missing");
-    console.log("Redirect URI:", redirectUri);
-    console.log("Client ID:", clientId);
-    console.log("Code Verifier:", codeVerifier ? "present" : "missing");
+    // Log request
+    OAuthLogger.tokenRequest(tokenParams);
 
-    // Validate grant type
-    if (grantType !== "authorization_code") {
-      console.log("❌ Invalid grant_type");
-      return NextResponse.json(
-        {
-          error: "unsupported_grant_type",
-          error_description: "Only authorization_code grant type is supported",
-        },
-        { status: 400 },
+    // Validate parameters
+    const validation = validateTokenParams(tokenParams);
+    if (!validation.isValid) {
+      OAuthLogger.error(
+        "Token validation",
+        validation.errorDescription || "Unknown validation error",
+      );
+      return createOAuth21ErrorResponse(
+        validation.error || "invalid_request",
+        validation.errorDescription || "Invalid request parameters",
       );
     }
 
-    // Validate required parameters
-    if (!code) {
-      console.log("❌ Missing authorization code");
-      return NextResponse.json(
-        {
-          error: "invalid_request",
-          error_description: "Missing authorization code",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!redirectUri) {
-      console.log("❌ Missing redirect_uri");
-      return NextResponse.json(
-        {
-          error: "invalid_request",
-          error_description: "Missing redirect_uri",
-        },
-        { status: 400 },
-      );
-    }
+    const {
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      code_verifier: codeVerifier,
+    } = tokenParams;
 
     // Retrieve stored authorization code data
     const authCodes = globalThis.authCodes || new Map();
-    const authData = authCodes.get(code);
+    const authData = authCodes.get(code) as AuthCodeData | undefined;
 
     if (!authData) {
-      console.log("❌ Invalid or expired authorization code");
-      return NextResponse.json(
-        {
-          error: "invalid_grant",
-          error_description: "Invalid or expired authorization code",
-        },
-        { status: 400 },
+      OAuthLogger.error(
+        "Token validation",
+        "Invalid or expired authorization code",
+      );
+      return createOAuth21ErrorResponse(
+        "invalid_grant",
+        "Invalid or expired authorization code",
       );
     }
 
     // Check if code has expired (10 minutes)
     if (Date.now() > authData.expiresAt) {
-      console.log("❌ Authorization code expired");
+      OAuthLogger.error("Token validation", "Authorization code expired");
       authCodes.delete(code);
-      return NextResponse.json(
-        {
-          error: "invalid_grant",
-          error_description: "Authorization code expired",
-        },
-        { status: 400 },
+      return createOAuth21ErrorResponse(
+        "invalid_grant",
+        "Authorization code expired",
       );
     }
 
     // Validate redirect URI matches (normalize localhost vs 127.0.0.1 for OAuth 2.1 compatibility)
-    const normalizeRedirectUri = (uri: string) => {
-      return uri
-        .replace("127.0.0.1", "localhost")
-        .replace(/\/$/, "")
-        .toLowerCase();
-    };
-
     const normalizedStoredUri = normalizeRedirectUri(authData.redirectUri);
-    const normalizedRequestUri = normalizeRedirectUri(redirectUri);
+    const normalizedRequestUri = normalizeRedirectUri(redirectUri || "");
 
     if (normalizedStoredUri !== normalizedRequestUri) {
-      console.log("❌ Redirect URI mismatch");
+      OAuthLogger.error("Token validation", "Redirect URI mismatch");
       console.log("Stored (normalized):", normalizedStoredUri);
       console.log("Request (normalized):", normalizedRequestUri);
-      return NextResponse.json(
-        {
-          error: "invalid_grant",
-          error_description: "Redirect URI does not match",
-        },
-        { status: 400 },
+      return createOAuth21ErrorResponse(
+        "invalid_grant",
+        "Redirect URI does not match",
       );
     }
 
     // Validate client ID if provided
     if (clientId && authData.clientId !== clientId) {
-      console.log("❌ Client ID mismatch");
-      return NextResponse.json(
-        {
-          error: "invalid_client",
-          error_description: "Client ID does not match",
-        },
-        { status: 400 },
+      OAuthLogger.error("Token validation", "Client ID mismatch");
+      return createOAuth21ErrorResponse(
+        "invalid_client",
+        "Client ID does not match",
       );
     }
 
     // PKCE verification if code challenge was provided
     if (authData.codeChallenge) {
       if (!codeVerifier) {
-        console.log("❌ Missing code verifier for PKCE");
-        return NextResponse.json(
-          {
-            error: "invalid_request",
-            error_description: "Code verifier required for PKCE",
-          },
-          { status: 400 },
+        OAuthLogger.error("PKCE validation", "Missing code verifier");
+        return createOAuth21ErrorResponse(
+          "invalid_request",
+          "Code verifier required for PKCE",
         );
       }
 
@@ -147,13 +119,10 @@ export async function POST(request: NextRequest) {
         .digest("base64url");
 
       if (computedChallenge !== authData.codeChallenge) {
-        console.log("❌ PKCE verification failed");
-        return NextResponse.json(
-          {
-            error: "invalid_grant",
-            error_description: "PKCE verification failed",
-          },
-          { status: 400 },
+        OAuthLogger.error("PKCE validation", "PKCE verification failed");
+        return createOAuth21ErrorResponse(
+          "invalid_grant",
+          "PKCE verification failed",
         );
       }
 
@@ -163,32 +132,19 @@ export async function POST(request: NextRequest) {
     // Check if we have stored Google tokens for this authorization code
     if (authData.googleTokens) {
       console.log("✅ Using stored Google tokens for authorization code");
-      const googleTokens = authData.googleTokens;
+      const googleTokens = authData.googleTokens as GoogleTokens;
 
       // Clean up used authorization code
       authCodes.delete(code);
 
-      // Return OAuth 2.1 compliant token response
-      const tokenResponseData: TokenResponse = {
-        access_token: googleTokens.id_token || googleTokens.access_token,
-        token_type: "Bearer",
-        expires_in: googleTokens.expires_in || 3600,
-        scope: authData.scope || "openid profile email",
-      };
+      // Build token response using utility function
+      const tokenResponseData = buildTokenResponse(
+        googleTokens,
+        authData.scope,
+      );
 
-      // Include refresh token if available
-      if (googleTokens.refresh_token) {
-        tokenResponseData.refresh_token = googleTokens.refresh_token;
-      }
-
-      // Include ID token if available (for OpenID Connect)
-      if (googleTokens.id_token) {
-        tokenResponseData.id_token = googleTokens.id_token;
-      }
-
-      console.log("🎉 Token exchange completed successfully (stored tokens)");
-      console.log("Scope:", tokenResponseData.scope);
-      console.log("Expires in:", tokenResponseData.expires_in);
+      OAuthLogger.tokenSuccess(tokenResponseData);
+      console.log("(stored tokens)");
 
       return NextResponse.json(tokenResponseData);
     }
@@ -197,89 +153,56 @@ export async function POST(request: NextRequest) {
     console.log(
       "⚠️ No stored tokens - attempting direct Google exchange (fallback)",
     );
-
-    // Exchange authorization code for Google tokens
     console.log("🔄 Exchanging authorization code with Google...");
 
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID || "",
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
-        code: code,
-        grant_type: "authorization_code",
-        redirect_uri: `${resolveApiDomain()}/api/auth/callback/google`,
-      }),
-    });
+    const exchangeResult = await exchangeCodeForGoogleTokens(
+      code || "",
+      `${resolveApiDomain()}/api/auth/callback/google`,
+    );
 
-    if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.text();
-      console.error("❌ Google token exchange failed:", errorData);
-      return NextResponse.json(
-        {
-          error: "server_error",
-          error_description:
-            "Failed to exchange authorization code with Google",
-          details: errorData,
-        },
-        { status: 500 },
+    if (!exchangeResult.success || !exchangeResult.tokens) {
+      OAuthLogger.error(
+        "Google token exchange",
+        exchangeResult.error || "Unknown error",
+      );
+      return createOAuth21ErrorResponse(
+        "server_error",
+        "Failed to exchange authorization code with Google",
+        500,
+        { details: exchangeResult.error },
       );
     }
 
-    const googleTokens = await tokenResponse.json();
     console.log("✅ Google token exchange successful");
-    console.log("Received tokens:", Object.keys(googleTokens));
+    console.log("Received tokens:", Object.keys(exchangeResult.tokens));
 
     // Clean up used authorization code
     authCodes.delete(code);
 
-    // Return OAuth 2.1 compliant token response
-    const tokenResponseData: TokenResponse = {
-      access_token: googleTokens.id_token || googleTokens.access_token,
-      token_type: "Bearer",
-      expires_in: googleTokens.expires_in || 3600,
-      scope: authData.scope || "openid profile email",
-    };
+    // Build token response using utility function
+    const tokenResponseData = buildTokenResponse(
+      exchangeResult.tokens,
+      authData.scope,
+    );
 
-    // Include refresh token if available
-    if (googleTokens.refresh_token) {
-      tokenResponseData.refresh_token = googleTokens.refresh_token;
-    }
-
-    // Include ID token if available (for OpenID Connect)
-    if (googleTokens.id_token) {
-      tokenResponseData.id_token = googleTokens.id_token;
-    }
-
-    console.log("🎉 Token exchange completed successfully");
-    console.log("Scope:", tokenResponseData.scope);
-    console.log("Expires in:", tokenResponseData.expires_in);
+    OAuthLogger.tokenSuccess(tokenResponseData);
 
     return NextResponse.json(tokenResponseData);
   } catch (error) {
-    console.error("❌ Error in token endpoint:", error);
-    return NextResponse.json(
-      {
-        error: "server_error",
-        error_description: "Internal server error during token exchange",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
+    OAuthLogger.error(
+      "Token endpoint",
+      error instanceof Error ? error.message : String(error),
+    );
+    return createOAuth21ErrorResponse(
+      "server_error",
+      "Internal server error during token exchange",
+      500,
+      { details: error instanceof Error ? error.message : String(error) },
     );
   }
 }
 
 // Handle preflight OPTIONS requests
 export async function OPTIONS(_request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
+  return createOPTIONSResponse(CORS_CONFIGS.oauth);
 }
