@@ -124,8 +124,8 @@
                 {
                     "step": 2,
                     "title": "Configure VS Code MCP",
-                    "description": "Create or update the .vscode/mcp.json file in your workspace",
-                    "code": "{\n  \"servers\": {\n    \"hello-mcp-oauth\": {\n      \"type\": \"http\",\n      \"url\": \"{{MCP_ENDPOINT}}\",\n      \"oauth\": {\n        \"authorization_server\": \"https://accounts.google.com\",\n        \"protected_resource\": \"{{PROTECTED_RESOURCE_URL}}\"\n      }\n    }\n  }\n}"
+                    "description": "Create or update the .vscode/mcp.json file in your workspace with the actual working configuration",
+                    "code": "{\n  \"servers\": {\n    \"hello-mcp\": {\n      \"type\": \"http\",\n      \"url\": \"{{MCP_ENDPOINT}}\"\n    },\n    \"hello-mcp-local\": {\n      \"type\": \"http\",\n      \"url\": \"http://localhost:3000/api/mcp\"\n    }\n  }\n}"
                 },
                 {
                     "step": 3,
@@ -154,8 +154,8 @@
                 {
                     "step": 2,
                     "title": "Configure Claude Desktop",
-                    "description": "Add the MCP server to Claude Desktop configuration",
-                    "code": "{\n  \"mcpServers\": {\n    \"hello-mcp-oauth\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"mcp-remote\",\n        \"{{MCP_ENDPOINT}}\"\n      ],\n      \"oauth\": {\n        \"authorization_server\": \"https://accounts.google.com\",\n        \"protected_resource\": \"{{PROTECTED_RESOURCE_URL}}\"\n      }\n    }\n  }\n}"
+                    "description": "Add the MCP server to Claude Desktop configuration. Note: This server requires authentication, so Claude Desktop will prompt for OAuth authentication.",
+                    "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"{{MCP_ENDPOINT}}\"\n      ]\n    }\n  }\n}"
                 },
                 {
                     "step": 3,
@@ -166,6 +166,12 @@
                     "step": 4,
                     "title": "Authenticate",
                     "description": "Claude Desktop will handle OAuth authentication automatically using your browser"
+                },
+                {
+                    "step": 5,
+                    "title": "Test the Connection",
+                    "description": "Once authenticated, you can call the hello tool. Example output:",
+                    "code": "👋 Hello, [Your Name]! (authenticated as [Your Email]) This is an authenticated MCP tool!"
                 }
             ]
         }
