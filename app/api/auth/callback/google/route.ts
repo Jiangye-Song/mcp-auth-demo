@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Parse the extended state to get client's original redirect URI
-    let originalRedirectUri = "http://localhost:3001"; // fallback
+    let originalRedirectUri = ""; // Will be set from state or error
     let originalState = "";
     let clientType = "unknown";
 
@@ -56,8 +56,19 @@ export async function GET(request: NextRequest) {
         console.log("Parsed state object:", parsedState);
 
         originalRedirectUri =
-          parsedState.originalRedirectUri || originalRedirectUri;
+          parsedState.originalRedirectUri || "";
         originalState = parsedState.originalState || "";
+
+        // Validate that we got a redirect URI from the state
+        if (!originalRedirectUri) {
+          console.error("❌ No originalRedirectUri found in state parameter");
+          console.error("Parsed state:", parsedState);
+          return createOAuth21ErrorResponse(
+            "invalid_state",
+            "No original redirect URI found in state parameter",
+            400,
+          );
+        }
 
         // Detect client type based on redirect URI pattern with strict OAuth 2.1 validation
         if (originalRedirectUri.includes("oauth/callback")) {
@@ -103,15 +114,37 @@ export async function GET(request: NextRequest) {
         try {
           const parsedState = JSON.parse(stateParam);
           originalRedirectUri =
-            parsedState.originalRedirectUri || originalRedirectUri;
+            parsedState.originalRedirectUri || "";
           originalState = parsedState.originalState || "";
+
+          if (!originalRedirectUri) {
+            console.error("❌ No originalRedirectUri found in legacy format state");
+            return createOAuth21ErrorResponse(
+              "invalid_state",
+              "No original redirect URI found in state parameter",
+              400,
+            );
+          }
+
           clientType = "legacy-format";
         } catch (_e2) {
           console.log("Parse error:", e);
-          originalState = stateParam;
-          clientType = "fallback";
+          console.error("❌ Could not parse state parameter in any format");
+          return createOAuth21ErrorResponse(
+            "invalid_state",
+            "Could not parse state parameter",
+            400,
+          );
         }
       }
+    } else {
+      // No state parameter provided - this is required for OAuth 2.1
+      console.error("❌ OAuth 2.1 Compliance: No state parameter provided");
+      return createOAuth21ErrorResponse(
+        "invalid_request",
+        "State parameter is required for OAuth 2.1 compliance",
+        400,
+      );
     }
 
     console.log("Client details:", {
