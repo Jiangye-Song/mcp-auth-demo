@@ -1,5 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// OAuth 2.1 compliant error handling
+function redirectWithOAuth21Error(redirectUri: string | null, error: string, errorDescription: string, state: string | null) {
+    if (!redirectUri) {
+        return NextResponse.json({
+            error,
+            error_description: errorDescription,
+            oauth_version: '2.1',
+            compliance_note: 'This server only supports OAuth 2.1 authorization code flow'
+        }, { status: 400 });
+    }
+
+    const errorUrl = new URL(redirectUri);
+    errorUrl.searchParams.set('error', error);
+    errorUrl.searchParams.set('error_description', errorDescription);
+
+    if (state) {
+        errorUrl.searchParams.set('state', state);
+    }
+
+    // Add OAuth 2.1 compliance headers
+    return NextResponse.redirect(errorUrl.toString(), {
+        headers: {
+            'OAuth-Version': '2.1',
+            'Cache-Control': 'no-store'
+        }
+    });
+}
+
 export async function GET(request: NextRequest) {
     console.log('🔥 OAUTH CALLBACK HIT 🔥 - ', new Date().toISOString());
 
@@ -47,7 +75,7 @@ export async function GET(request: NextRequest) {
                 originalRedirectUri = parsedState.originalRedirectUri || originalRedirectUri;
                 originalState = parsedState.originalState || '';
 
-                // Detect client type based on redirect URI pattern
+                // Detect client type based on redirect URI pattern with strict OAuth 2.1 validation
                 if (originalRedirectUri.includes('oauth/callback')) {
                     // MCP Remote (mcp-remote tool) and Claude Desktop both use /oauth/callback pattern
                     clientType = 'mcp-remote';
@@ -55,12 +83,30 @@ export async function GET(request: NextRequest) {
                     clientType = 'vscode-web';
                 } else if (originalRedirectUri.startsWith('http://127.0.0.1:') ||
                     originalRedirectUri.startsWith('http://localhost:')) {
-                    clientType = 'vscode-local'; // VS Code's temporary OAuth server
+                    // Ensure VS Code local follows proper port patterns for OAuth 2.1 compliance
+                    const vsCodePattern = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/?$/;
+                    if (vsCodePattern.test(originalRedirectUri)) {
+                        clientType = 'vscode-local';
+                    } else {
+                        clientType = 'unsupported';
+                    }
                 } else {
-                    clientType = 'generic';
+                    // OAuth 2.1: No generic fallback allowed
+                    clientType = 'unsupported';
                 }
 
                 console.log('Detected client type:', clientType);
+
+                // Reject unsupported clients immediately (OAuth 2.1 compliance)
+                if (clientType === 'unsupported') {
+                    console.error('❌ OAuth 2.1 Compliance: Unsupported client redirect URI:', originalRedirectUri);
+                    return redirectWithOAuth21Error(
+                        originalRedirectUri,
+                        'invalid_client',
+                        'Client redirect URI not supported for OAuth 2.1 compliance',
+                        originalState
+                    );
+                }
             } catch (e) {
                 console.log('Could not decode/parse state, trying direct JSON parse...');
                 try {
@@ -197,8 +243,8 @@ export async function GET(request: NextRequest) {
 
                 finalRedirectUrl = vsCodeRedirectUrl.toString();
                 console.log('Using VS Code web redirect with protocol parameters');
-            } else if (clientType === 'vscode-local' && originalRedirectUri.startsWith('http://127.0.0.1:')) {
-                // VS Code local server - use authorization code flow (VS Code expects this)
+            } else if (clientType === 'vscode-local' && (originalRedirectUri.startsWith('http://127.0.0.1:') || originalRedirectUri.startsWith('http://localhost:'))) {
+                // VS Code local server - OAuth 2.1 compliant authorization code flow
                 const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
                 const vsCodeUrl = new URL(baseUrl);
 
@@ -215,7 +261,7 @@ export async function GET(request: NextRequest) {
                     }
                 }
 
-                // Return our authorization code (not Google's) - VS Code will exchange it with our token endpoint
+                // Return authorization code (OAuth 2.1 compliant - no hash fragments)
                 if (authCode) {
                     vsCodeUrl.searchParams.set('code', authCode);
                 } else {
@@ -228,26 +274,20 @@ export async function GET(request: NextRequest) {
                 }
 
                 finalRedirectUrl = vsCodeUrl.toString();
-                console.log('Using authorization code flow for VS Code local server');
+                console.log('✅ OAuth 2.1 Compliant: Using authorization code flow for VS Code local server');
                 console.log('VS Code redirect URI preserved:', baseUrl);
                 console.log('Returning authorization code for VS Code to exchange:', authCode || code);
             } else {
-                // ALL other clients use URL fragments (fallback behavior)
-                const baseUrl = originalRedirectUri.split('#')[0].split('?')[0];
+                // OAuth 2.1 Compliance: No hash fragment fallback allowed
+                console.error('❌ OAuth 2.1 Violation: Unsupported client type for authentication:', clientType);
+                console.error('Redirect URI:', originalRedirectUri);
 
-                const tokenParams = new URLSearchParams({
-                    access_token: tokens.id_token,
-                    token_type: 'Bearer',
-                    expires_in: tokens.expires_in?.toString() || '3600'
-                });
-
-                // Only add state if it exists and is not empty
-                if (originalState && originalState.trim() !== '') {
-                    tokenParams.set('state', originalState);
-                }
-
-                finalRedirectUrl = `${baseUrl}#${tokenParams.toString()}`;
-                console.log(`Using URL fragments for ${clientType} client`);
+                return redirectWithOAuth21Error(
+                    originalRedirectUri,
+                    'unsupported_response_type',
+                    'OAuth 2.1 only supports authorization code flow with query parameters',
+                    originalState
+                );
             }
 
             console.log('Token is JWT format:', tokens.id_token.split('.').length === 3);
@@ -266,7 +306,7 @@ export async function GET(request: NextRequest) {
 
         console.log('==================================');
 
-        console.log(`Final ${clientType} redirect URL (token masked):`,
+        console.log(`✅ OAuth 2.1 Compliant: Final ${clientType} redirect URL (token masked):`,
             finalRedirectUrl.replace(tokens.id_token || '', '[ID_TOKEN_MASKED]')
                 .replace(tokens.access_token || '', '[ACCESS_TOKEN_MASKED]'));
 
@@ -276,17 +316,24 @@ export async function GET(request: NextRequest) {
     } catch (err) {
         console.error('Error in OAuth callback:', err);
 
-        // Return error information as JSON for debugging
+        // Return OAuth 2.1 compliant error information
         return NextResponse.json({
-            error: 'callback_error',
-            message: 'Error processing OAuth callback',
+            error: 'server_error',
+            error_description: 'Error processing OAuth 2.1 callback',
+            oauth_version: '2.1',
             details: err instanceof Error ? err.message : String(err),
             received: {
                 code: code ? 'present' : 'missing',
                 error,
                 state: stateParam
             }
-        }, { status: 500 });
+        }, {
+            status: 500,
+            headers: {
+                'OAuth-Version': '2.1',
+                'Cache-Control': 'no-store'
+            }
+        });
     }
 } export async function POST(request: NextRequest) {
     const body = await request.text();

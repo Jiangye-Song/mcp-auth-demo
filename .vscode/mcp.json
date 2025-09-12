@@ -1,12 +1,12 @@
 {
   "servers": {
-    "hello-mcp-local": {
-      "type": "http",
-      "url": "http://localhost:3000/api/mcp"
-    },
     "hello-mcp": {
       "type": "http",
       "url": "https://mcp-auth-demo-rust.vercel.app/api/mcp"
+    },
+    "hello-mcp-local": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp"
     }
   }
 }
