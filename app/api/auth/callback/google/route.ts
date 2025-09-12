@@ -56,8 +56,37 @@ export async function GET(request: NextRequest) {
         console.log("Parsed state object:", parsedState);
 
         originalRedirectUri =
-          parsedState.originalRedirectUri || "";
+          parsedState.originalRedirectUri || parsedState.resource || "";
         originalState = parsedState.originalState || "";
+
+        // For VS Code MCP, if we got a resource URL but no redirect URI, 
+        // we need to check if this is a VS Code local request
+        if (!originalRedirectUri || parsedState.resource) {
+          console.log("Checking for VS Code MCP pattern...");
+          console.log("Resource field:", parsedState.resource);
+          
+          // If we have a resource but no redirect URI, this might be VS Code MCP
+          // We need to extract the redirect URI from the original request
+          // For now, we'll handle this as a special case
+          if (parsedState.resource && !parsedState.originalRedirectUri) {
+            // This is likely VS Code MCP - the resource is the MCP endpoint
+            // We need to determine if this is local or remote based on the resource URL
+            if (parsedState.resource.includes("localhost") || parsedState.resource.includes("127.0.0.1")) {
+              // Local MCP server - VS Code should have provided its callback URL
+              // We need to look at the request headers or infer from the flow
+              console.log("Detected VS Code local MCP flow");
+              // For VS Code local, we typically expect a localhost callback
+              // This suggests the state preparation needs to be fixed
+              originalRedirectUri = "vscode://ms-vscode.vscode-mcp/oauth-callback";
+              clientType = "vscode-local";
+            } else {
+              // Remote MCP server
+              console.log("Detected VS Code remote MCP flow");
+              originalRedirectUri = "vscode://ms-vscode.vscode-mcp/oauth-callback";
+              clientType = "vscode-mcp";
+            }
+          }
+        }
 
         // Validate that we got a redirect URI from the state
         if (!originalRedirectUri) {
@@ -71,25 +100,31 @@ export async function GET(request: NextRequest) {
         }
 
         // Detect client type based on redirect URI pattern with strict OAuth 2.1 validation
-        if (originalRedirectUri.includes("oauth/callback")) {
-          // MCP Remote (mcp-remote tool) and Claude Desktop both use /oauth/callback pattern
-          clientType = "mcp-remote";
-        } else if (originalRedirectUri.includes("vscode.dev/redirect")) {
-          clientType = "vscode-web";
-        } else if (
-          originalRedirectUri.startsWith("http://127.0.0.1:") ||
-          originalRedirectUri.startsWith("http://localhost:")
-        ) {
-          // Ensure VS Code local follows proper port patterns for OAuth 2.1 compliance
-          const vsCodePattern = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/?$/;
-          if (vsCodePattern.test(originalRedirectUri)) {
-            clientType = "vscode-local";
+        // Skip detection if we already set it above
+        if (clientType === "unknown") {
+          if (originalRedirectUri.includes("oauth/callback")) {
+            // MCP Remote (mcp-remote tool) and Claude Desktop both use /oauth/callback pattern
+            clientType = "mcp-remote";
+          } else if (originalRedirectUri.includes("vscode.dev/redirect")) {
+            clientType = "vscode-web";
+          } else if (originalRedirectUri.startsWith("vscode://")) {
+            // VS Code protocol URI
+            clientType = "vscode-mcp";
+          } else if (
+            originalRedirectUri.startsWith("http://127.0.0.1:") ||
+            originalRedirectUri.startsWith("http://localhost:")
+          ) {
+            // Ensure VS Code local follows proper port patterns for OAuth 2.1 compliance
+            const vsCodePattern = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/?$/;
+            if (vsCodePattern.test(originalRedirectUri)) {
+              clientType = "vscode-local";
+            } else {
+              clientType = "unsupported";
+            }
           } else {
+            // OAuth 2.1: No generic fallback allowed
             clientType = "unsupported";
           }
-        } else {
-          // OAuth 2.1: No generic fallback allowed
-          clientType = "unsupported";
         }
 
         console.log("Detected client type:", clientType);
@@ -114,8 +149,26 @@ export async function GET(request: NextRequest) {
         try {
           const parsedState = JSON.parse(stateParam);
           originalRedirectUri =
-            parsedState.originalRedirectUri || "";
+            parsedState.originalRedirectUri || parsedState.resource || "";
           originalState = parsedState.originalState || "";
+
+          // Apply the same VS Code MCP logic for legacy format
+          if (!originalRedirectUri || parsedState.resource) {
+            console.log("Checking for VS Code MCP pattern in legacy format...");
+            console.log("Resource field:", parsedState.resource);
+            
+            if (parsedState.resource && !parsedState.originalRedirectUri) {
+              if (parsedState.resource.includes("localhost") || parsedState.resource.includes("127.0.0.1")) {
+                console.log("Detected VS Code local MCP flow (legacy format)");
+                originalRedirectUri = "vscode://ms-vscode.vscode-mcp/oauth-callback";
+                clientType = "vscode-local";
+              } else {
+                console.log("Detected VS Code remote MCP flow (legacy format)");
+                originalRedirectUri = "vscode://ms-vscode.vscode-mcp/oauth-callback";
+                clientType = "vscode-mcp";
+              }
+            }
+          }
 
           if (!originalRedirectUri) {
             console.error("❌ No originalRedirectUri found in legacy format state");
@@ -126,7 +179,9 @@ export async function GET(request: NextRequest) {
             );
           }
 
-          clientType = "legacy-format";
+          if (clientType === "unknown") {
+            clientType = "legacy-format";
+          }
         } catch (_e2) {
           console.log("Parse error:", e);
           console.error("❌ Could not parse state parameter in any format");
@@ -300,6 +355,46 @@ export async function GET(request: NextRequest) {
 
         finalRedirectUrl = vsCodeRedirectUrl.toString();
         console.log("Using VS Code web redirect with protocol parameters");
+      } else if (clientType === "vscode-mcp" && originalRedirectUri.startsWith("vscode://")) {
+        // VS Code MCP protocol redirect - authorization code flow
+        console.log("Processing VS Code MCP protocol redirect");
+
+        // VS Code expects the authorization code, not tokens directly
+        const vsCodeUrl = new URL(originalRedirectUri);
+
+        // Extract our stored authorization code from parsed state
+        let authCode = "";
+        if (stateParam) {
+          try {
+            const decodedState = Buffer.from(stateParam, "base64url").toString(
+              "utf-8",
+            );
+            const parsedState = JSON.parse(decodedState);
+            authCode = parsedState.authCode || "";
+            console.log("Retrieved stored auth code for VS Code MCP:", authCode);
+          } catch (_e) {
+            console.log("Could not extract auth code from state");
+          }
+        }
+
+        // Return authorization code (OAuth 2.1 compliant)
+        if (authCode) {
+          vsCodeUrl.searchParams.set("code", authCode);
+        } else {
+          // Fallback: use Google's code directly
+          vsCodeUrl.searchParams.set("code", code);
+        }
+
+        if (originalState && originalState.trim() !== "") {
+          vsCodeUrl.searchParams.set("state", originalState);
+        }
+
+        finalRedirectUrl = vsCodeUrl.toString();
+        console.log("✅ OAuth 2.1 Compliant: Using authorization code flow for VS Code MCP");
+        console.log(
+          "Returning authorization code for VS Code MCP to exchange:",
+          authCode || code,
+        );
       } else if (
         clientType === "vscode-local" &&
         (originalRedirectUri.startsWith("http://127.0.0.1:") ||
