@@ -7,22 +7,23 @@
  * @see https://datatracker.ietf.org/doc/html/rfc8414
  */
 
+import { resolveApiDomain } from '../../../lib/url-resolver';
+
 export async function GET(req: Request) {
-    const url = new URL(req.url);
-    const origin = url.origin;
+    const baseUrl = resolveApiDomain();
 
     const metadata = {
         // Authorization server identifier
-        issuer: origin,
+        issuer: baseUrl,
 
         // Authorization endpoint - use our custom endpoint
-        authorization_endpoint: `${origin}/api/auth/authorize`,
+        authorization_endpoint: `${baseUrl}/api/auth/authorize`,
 
         // Token endpoint - use our custom endpoint for VS Code compatibility
-        token_endpoint: `${origin}/api/auth/token`,
+        token_endpoint: `${baseUrl}/api/auth/token`,
 
         // Dynamic client registration endpoint - our custom endpoint
-        registration_endpoint: `${origin}/api/auth/register`,
+        registration_endpoint: `${baseUrl}/api/auth/register`,
 
         // Supported scopes
         scopes_supported: ["openid", "email", "profile"],

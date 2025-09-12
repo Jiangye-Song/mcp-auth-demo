@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
+import { resolveApiDomain } from '../../../../lib/url-resolver';
 
 /**
  * OAuth 2.1 Token Endpoint for VS Code MCP Authentication
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
                 client_secret: process.env.GOOGLE_CLIENT_SECRET!,
                 code: code,
                 grant_type: 'authorization_code',
-                redirect_uri: `${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/auth/callback/google`,
+                redirect_uri: `${resolveApiDomain()}/api/auth/callback/google`,
             }),
         });
 

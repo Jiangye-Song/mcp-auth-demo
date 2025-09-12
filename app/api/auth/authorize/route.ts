@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
+import { resolveApiDomain } from '../../../../lib/url-resolver';
 
 /**
  * OAuth 2.1 Authorization Endpoint with MCP 2025-06-18 Compliance
@@ -62,10 +63,10 @@ export async function GET(request: NextRequest) {
 
     // MCP 2025-06-18: Validate resource parameter if provided
     if (resource) {
-        const baseUrl = new URL(request.url).origin;
+        const baseUrl = resolveApiDomain();
         try {
             const resourceUrl = new URL(resource);
-            if (resourceUrl.origin !== baseUrl) {
+            if (resourceUrl.origin !== new URL(baseUrl).origin) {
                 console.log('❌ Invalid resource parameter - must match server origin');
                 return redirectWithError(redirectUri, 'invalid_target', 'Resource parameter must match server origin', state);
             }
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate redirect URI (OAuth 2.1 requires exact match)
+    const baseUrl = resolveApiDomain();
     const validRedirectUris = [
         'http://127.0.0.1:3334/oauth/callback', // MCP Remote
         'http://localhost:3334/oauth/callback',  // MCP Remote
@@ -85,8 +87,7 @@ export async function GET(request: NextRequest) {
         'https://insiders.vscode.dev/redirect', // VS Code Insiders web redirect
         'vscode://ms-vscode.vscode-mcp/oauth-callback', // VS Code protocol URL
         'vscode-insiders://ms-vscode.vscode-mcp/oauth-callback', // VS Code Insiders protocol URL
-        `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
-        `${new URL(request.url).origin}/api/auth/callback/google`
+        `${baseUrl}/api/auth/callback/google`
     ];
 
     // Allow dynamic ports for VS Code and MCP Remote
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
     // Build Google OAuth URL with resource parameter
     const googleOAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     googleOAuthUrl.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID!);
-    googleOAuthUrl.searchParams.set('redirect_uri', `${new URL(request.url).origin}/api/auth/callback/google`);
+    googleOAuthUrl.searchParams.set('redirect_uri', `${baseUrl}/api/auth/callback/google`);
     googleOAuthUrl.searchParams.set('response_type', 'code');
     googleOAuthUrl.searchParams.set('scope', 'openid profile email');
     googleOAuthUrl.searchParams.set('access_type', 'offline');

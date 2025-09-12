@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveApiDomain } from '../../../../../lib/url-resolver';
 
 // OAuth 2.1 compliant error handling
 function redirectWithOAuth21Error(redirectUri: string | null, error: string, errorDescription: string, state: string | null) {
@@ -130,8 +131,8 @@ export async function GET(request: NextRequest) {
 
         // Exchange authorization code for tokens
         // Use the same redirect URI that was used in the authorization request
-        const currentOrigin = new URL(request.url).origin;
-        const redirectUriForTokenExchange = `${currentOrigin}/api/auth/callback/google`;
+        const baseUrl = resolveApiDomain();
+        const redirectUriForTokenExchange = `${baseUrl}/api/auth/callback/google`;
 
         console.log('Using redirect URI for token exchange:', redirectUriForTokenExchange);
 

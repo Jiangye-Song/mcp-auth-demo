@@ -1,16 +1,7 @@
+import { resolveApiDomain } from "@/lib/url-resolver";
+
 /**
- * OAuth 2.0 Dyna            redirect_uris: [
-                `${new URL(req.url).origin}/api/auth/callback/google`,
-                // Claude Desktop callback patterns
-                `${new URL(req.url).origin}/oauth/callback`,
-                // Common MCP client callback patterns
-                "http://localhost:6180/oauth/callback",
-                "http://localhost:6181/oauth/callback", 
-                "http://localhost:6182/oauth/callback",
-                "http://localhost:6183/oauth/callback",
-                "http://localhost:6184/oauth/callback",
-                "http://localhost:6185/oauth/callback"
-            ], Registration endpoint (RFC 7591)
+ * OAuth 2.0 Dynamic Client Registration endpoint (RFC 7591)
  * 
  * This endpoint allows MCP clients like Claude Desktop to dynamically register
  * themselves as OAuth clients. Since we're using Google OAuth, we return our
@@ -26,14 +17,12 @@ export async function POST(req: Request) {
         // Use the redirect URIs provided by the client, with fallbacks
         const clientRedirectUris = registrationRequest.redirect_uris || [];
 
-        // Get the production URL from Vercel environment or construct from request
-        const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-            : new URL(req.url).origin;
+        // Get the base URL using url-resolver
+        const baseUrl = resolveApiDomain();
 
         const baseRedirectUris = [
-            `${productionUrl}/api/auth/callback/google`,
-            `${productionUrl}/oauth/callback`,
+            `${baseUrl}/api/auth/callback/google`,
+            `${baseUrl}/oauth/callback`,
         ];
 
         // For Google OAuth, we can ONLY use pre-registered redirect URIs
@@ -65,7 +54,7 @@ export async function POST(req: Request) {
             // Return the authorization server endpoints
             authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
             // Use our custom token endpoint that handles redirect_uri correctly
-            token_endpoint: `${productionUrl}/api/auth/token`,
+            token_endpoint: `${baseUrl}/api/auth/token`,
             userinfo_endpoint: "https://www.googleapis.com/oauth2/v2/userinfo"
         };
 

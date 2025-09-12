@@ -1,6 +1,7 @@
 import {
     generateProtectedResourceMetadata,
 } from "mcp-handler";
+import { resolveApiDomain } from "@/lib/url-resolver";
 
 /**
  * OAuth 2.0 Protected Resource Metadata endpoint (RFC 9728)
@@ -12,28 +13,27 @@ import {
  * @see https://datatracker.ietf.org/doc/html/rfc9728
  */
 function handler(req: Request) {
-    // Get the origin from the request
-    const url = new URL(req.url);
-    const origin = url.origin;
+    // Get the base URL using url-resolver
+    const baseUrl = resolveApiDomain();
 
     // Our MCP server resource is at /api/mcp
-    const resourceUrl = `${origin}/api/mcp`;
+    const resourceUrl = `${baseUrl}/api/mcp`;
 
     // Generate metadata with the correct resource URL and our authorization server
     const metadata = generateProtectedResourceMetadata({
-        authServerUrls: [`${origin}`], // Use our own authorization server
+        authServerUrls: [`${baseUrl}`], // Use our own authorization server
         resourceUrl,
         additionalMetadata: {
             // Add OAuth 2.0 scopes that clients should request
             scopes_supported: ["openid", "email", "profile"],
             // Point to our authorization server metadata
-            authorization_server: `${origin}/.well-known/oauth-authorization-server`,
+            authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`,
             // Add token endpoint information
             token_endpoint: "https://oauth2.googleapis.com/token",
             // Use our custom authorization endpoint that ensures proper scope parameter
-            authorization_endpoint: `${origin}/api/auth/authorize`,
+            authorization_endpoint: `${baseUrl}/api/auth/authorize`,
             // Add dynamic client registration endpoint (RFC 7591)
-            registration_endpoint: `${origin}/api/auth/register`,
+            registration_endpoint: `${baseUrl}/api/auth/register`,
             // Specify that we support dynamic client registration
             registration_endpoint_auth_methods_supported: ["none"],
             // Specify that we use bearer tokens
