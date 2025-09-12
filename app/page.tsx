@@ -5,6 +5,7 @@ import {
   listTools,
   sayHello as sayHelloAction,
 } from "@/app/actions/mcp-actions";
+import { getMcpEndpointUrl, resolveApiDomain } from "@/lib/url-resolver";
 
 export default function Home() {
   const [name, setName] = useState("");
@@ -49,7 +50,7 @@ export default function Home() {
       }
 
       // Test authenticated MCP call
-      const response = await fetch("/api/mcp", {
+      const response = await fetch(getMcpEndpointUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -85,7 +86,7 @@ export default function Home() {
     setLoading(true);
     try {
       // Test unauthenticated MCP call - should return 401
-      const response = await fetch("/api/mcp", {
+      const response = await fetch(getMcpEndpointUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -239,7 +240,7 @@ export default function Home() {
                     MCP Endpoint:
                   </h3>
                   <code className="text-sm text-blue-800 bg-blue-100 px-2 py-1 rounded">
-                    http://localhost:3001/api/mcp
+                    {getMcpEndpointUrl()}
                   </code>
                 </div>
 
@@ -248,7 +249,7 @@ export default function Home() {
                     OAuth Metadata Endpoint:
                   </h3>
                   <code className="text-sm text-green-800 bg-green-100 px-2 py-1 rounded">
-                    http://localhost:3001/.well-known/oauth-protected-resource
+                    {resolveApiDomain()}/.well-known/oauth-protected-resource
                   </code>
                 </div>
 
@@ -318,11 +319,11 @@ export default function Home() {
       "args": [
         "-y", 
         "mcp-remote",
-        "http://localhost:3001/api/mcp"
+        "${getMcpEndpointUrl()}"
       ],
       "oauth": {
         "authorization_server": "https://accounts.google.com",
-        "protected_resource": "http://localhost:3001/.well-known/oauth-protected-resource"
+        "protected_resource": "${resolveApiDomain()}/.well-known/oauth-protected-resource"
       }
     }
   }
