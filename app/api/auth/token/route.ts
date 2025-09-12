@@ -74,9 +74,18 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        // Validate redirect URI matches
-        if (authData.redirectUri !== redirectUri) {
+        // Validate redirect URI matches (normalize localhost vs 127.0.0.1 for OAuth 2.1 compatibility)
+        const normalizeRedirectUri = (uri: string) => {
+            return uri.replace('127.0.0.1', 'localhost').replace(/\/$/, '').toLowerCase();
+        };
+
+        const normalizedStoredUri = normalizeRedirectUri(authData.redirectUri);
+        const normalizedRequestUri = normalizeRedirectUri(redirectUri);
+
+        if (normalizedStoredUri !== normalizedRequestUri) {
             console.log('❌ Redirect URI mismatch');
+            console.log('Stored (normalized):', normalizedStoredUri);
+            console.log('Request (normalized):', normalizedRequestUri);
             return NextResponse.json({
                 error: 'invalid_grant',
                 error_description: 'Redirect URI does not match'
