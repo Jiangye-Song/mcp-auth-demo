@@ -1,12 +1,17 @@
 "use client";
 
-import React from "react";
 import { useMemo, useState } from "react";
-import {
-  sayHello as sayHelloAction,
-} from "@/app/actions/mcp-actions";
+import { sayHello as sayHelloAction } from "@/app/actions/mcp-actions";
 import baseContent from "@/lib/content.json";
 import { getMcpEndpointUrl, resolveApiDomain } from "@/lib/url-resolver";
+
+// Type for testing methods that may have additional properties
+type TestMethod = {
+  name: string;
+  description: string;
+  example?: string | object;
+  url?: string;
+};
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("testing");
@@ -32,11 +37,11 @@ export default function Home() {
 
     // Helper function to recursively replace placeholders in objects
     const replaceInObject = (obj: unknown): unknown => {
-      if (typeof obj === 'string') {
+      if (typeof obj === "string") {
         return replacePlaceholders(obj);
       }
       if (Array.isArray(obj)) {
-        return obj.map(item => replaceInObject(item));
+        return obj.map((item) => replaceInObject(item));
       }
       if (obj && typeof obj === "object") {
         const newObj: Record<string, unknown> = {};
@@ -158,7 +163,7 @@ export default function Home() {
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+      console.error("Failed to copy text: ", err);
     }
   };
 
@@ -167,8 +172,7 @@ export default function Home() {
     <button
       type="button"
       onClick={() => setActiveTab(id)}
-      className={`nav-button ${activeTab === id ? "active" : "inactive"
-        }`}
+      className={`nav-button ${activeTab === id ? "active" : "inactive"}`}
     >
       {label}
     </button>
@@ -220,7 +224,9 @@ export default function Home() {
           {activeTab === "testing" && (
             <div>
               <h2 className="section-title">{content.testing.title}</h2>
-              <p className="section-description">{content.testing.description}</p>
+              <p className="section-description">
+                {content.testing.description}
+              </p>
 
               {/* Quick Test Section */}
               <div className="test-container">
@@ -250,7 +256,10 @@ export default function Home() {
                 {/* Authenticated Test Section */}
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="test-token" className="block text-sm font-medium mb-2 text-gray-300">
+                    <label
+                      htmlFor="test-token"
+                      className="block text-sm font-medium mb-2 text-gray-300"
+                    >
                       Google ID Token (for authenticated testing):
                     </label>
                     <div className="flex gap-2">
@@ -297,25 +306,43 @@ export default function Home() {
               {/* Testing Methods */}
               <h3 className="section-title text-xl mt-8">Testing Methods</h3>
               <div className="component-grid">
-                {content.testing.methods.map((method) => (
-                  <div key={method.name} className="component-card">
-                    <h4 className="component-title">{method.name}</h4>
-                    <p className="component-description">{method.description}</p>
-                    {(method as any).example && (
-                      <div className="mt-3">
-                        <h5 className="text-sm font-semibold mb-2 text-blue-300">Example:</h5>
-                        <CodeBlock code={typeof (method as any).example === 'string' ? (method as any).example : JSON.stringify((method as any).example, null, 2)} />
-                      </div>
-                    )}
-                    {(method as any).url && (
-                      <div className="mt-2">
-                        <a href={(method as any).url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm">
-                          {(method as any).url}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {content.testing.methods.map((method) => {
+                  const testMethod = method as TestMethod;
+                  return (
+                    <div key={method.name} className="component-card">
+                      <h4 className="component-title">{method.name}</h4>
+                      <p className="component-description">
+                        {method.description}
+                      </p>
+                      {testMethod.example && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-semibold mb-2 text-blue-300">
+                            Example:
+                          </h5>
+                          <CodeBlock
+                            code={
+                              typeof testMethod.example === "string"
+                                ? testMethod.example
+                                : JSON.stringify(testMethod.example, null, 2)
+                            }
+                          />
+                        </div>
+                      )}
+                      {testMethod.url && (
+                        <div className="mt-2">
+                          <a
+                            href={testMethod.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:underline text-sm"
+                          >
+                            {testMethod.url}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -324,7 +351,9 @@ export default function Home() {
           {activeTab === "architecture" && (
             <div>
               <h2 className="section-title">{content.architecture.title}</h2>
-              <p className="section-description">{content.architecture.description}</p>
+              <p className="section-description">
+                {content.architecture.description}
+              </p>
 
               {/* Components Grid */}
               <div className="component-grid">
@@ -332,7 +361,9 @@ export default function Home() {
                   <div key={component.name} className="component-card">
                     <h3 className="component-title">{component.name}</h3>
                     <code className="component-path">{component.path}</code>
-                    <p className="component-description">{component.description}</p>
+                    <p className="component-description">
+                      {component.description}
+                    </p>
                     <ul className="feature-list">
                       {component.features.map((feature) => (
                         <li key={feature} className="feature-item">
@@ -359,7 +390,9 @@ export default function Home() {
                     <h4 className="component-title">{tool.name}</h4>
                     <p className="component-description">{tool.description}</p>
                     <div className="mt-3">
-                      <h5 className="text-sm font-semibold mb-2 text-blue-300">Example Usage:</h5>
+                      <h5 className="text-sm font-semibold mb-2 text-blue-300">
+                        Example Usage:
+                      </h5>
                       <CodeBlock code={JSON.stringify(tool.example, null, 2)} />
                     </div>
                   </div>
@@ -371,8 +404,12 @@ export default function Home() {
           {/* OAuth 2.1 Tab */}
           {activeTab === "oauth" && (
             <div>
-              <h2 className="section-title">{content.oauth21Compliance.title}</h2>
-              <p className="section-description">{content.oauth21Compliance.description}</p>
+              <h2 className="section-title">
+                {content.oauth21Compliance.title}
+              </h2>
+              <p className="section-description">
+                {content.oauth21Compliance.description}
+              </p>
 
               {/* OAuth Features Grid */}
               <div className="oauth-grid">
@@ -397,8 +434,12 @@ export default function Home() {
 
               {/* VS Code Setup */}
               <div className="mb-8">
-                <h3 className="component-title text-2xl mb-4">{content.integrations.vsCode.title}</h3>
-                <p className="section-description">{content.integrations.vsCode.description}</p>
+                <h3 className="component-title text-2xl mb-4">
+                  {content.integrations.vsCode.title}
+                </h3>
+                <p className="section-description">
+                  {content.integrations.vsCode.description}
+                </p>
 
                 <div className="steps-container">
                   {content.integrations.vsCode.steps.map((step) => (
@@ -419,8 +460,12 @@ export default function Home() {
 
               {/* Claude Desktop Setup */}
               <div>
-                <h3 className="component-title text-2xl mb-4">{content.integrations.claudeDesktop.title}</h3>
-                <p className="section-description">{content.integrations.claudeDesktop.description}</p>
+                <h3 className="component-title text-2xl mb-4">
+                  {content.integrations.claudeDesktop.title}
+                </h3>
+                <p className="section-description">
+                  {content.integrations.claudeDesktop.description}
+                </p>
 
                 <div className="steps-container">
                   {content.integrations.claudeDesktop.steps.map((step) => (
@@ -451,15 +496,20 @@ export default function Home() {
                 {content.endpoints.list.map((endpoint) => (
                   <div key={endpoint.path} className="endpoint-item">
                     <div className="endpoint-header">
-                      <span className={`method-badge method-${endpoint.method.toLowerCase()}`}>
+                      <span
+                        className={`method-badge method-${endpoint.method.toLowerCase()}`}
+                      >
                         {endpoint.method}
                       </span>
                       <code className="endpoint-path">{endpoint.path}</code>
                     </div>
-                    <p className="endpoint-description">{endpoint.description}</p>
+                    <p className="endpoint-description">
+                      {endpoint.description}
+                    </p>
                     <div className="endpoint-details">
                       <div className="endpoint-detail">
-                        <strong>Authentication:</strong> {endpoint.authentication}
+                        <strong>Authentication:</strong>{" "}
+                        {endpoint.authentication}
                       </div>
                       <div className="endpoint-detail">
                         <strong>CORS:</strong> {endpoint.cors}
@@ -475,17 +525,25 @@ export default function Home() {
           {activeTab === "security" && (
             <div>
               <h2 className="section-title">{content.security.title}</h2>
-              <p className="section-description">{content.security.description}</p>
+              <p className="section-description">
+                {content.security.description}
+              </p>
 
               {/* Security Features Grid */}
               <div className="security-grid">
                 {content.security.features.map((feature) => (
                   <div key={feature.name} className="security-item">
                     <h3 className="security-title">{feature.name}</h3>
-                    <p className="security-description">{feature.description}</p>
+                    <p className="security-description">
+                      {feature.description}
+                    </p>
                     <div className="security-implementation">
-                      <div className="security-implementation-title">Implementation:</div>
-                      <div className="security-implementation-text">{feature.implementation}</div>
+                      <div className="security-implementation-title">
+                        Implementation:
+                      </div>
+                      <div className="security-implementation-text">
+                        {feature.implementation}
+                      </div>
                     </div>
                   </div>
                 ))}

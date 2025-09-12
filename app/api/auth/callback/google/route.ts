@@ -55,18 +55,23 @@ export async function GET(request: NextRequest) {
         const parsedState = JSON.parse(decodedState);
         console.log("Parsed state object:", parsedState);
 
-        originalRedirectUri =
-          parsedState.originalRedirectUri || "";
+        originalRedirectUri = parsedState.originalRedirectUri || "";
         originalState = parsedState.originalState || "";
 
         // Handle VS Code MCP format that uses 'resource' field instead of 'originalRedirectUri'
         // The 'resource' field contains the MCP endpoint, but we need the actual redirect URI
         // For now, we'll log this case and return a helpful error
         if (!originalRedirectUri && parsedState.resource) {
-          console.error("❌ VS Code MCP state format detected with 'resource' field");
+          console.error(
+            "❌ VS Code MCP state format detected with 'resource' field",
+          );
           console.error("Resource:", parsedState.resource);
-          console.error("This suggests the OAuth authorization request is missing the original redirect URI");
-          console.error("VS Code should provide the redirect URI in the state parameter");
+          console.error(
+            "This suggests the OAuth authorization request is missing the original redirect URI",
+          );
+          console.error(
+            "VS Code should provide the redirect URI in the state parameter",
+          );
           return createOAuth21ErrorResponse(
             "invalid_state",
             "VS Code MCP format detected but missing original redirect URI. The authorization flow needs to preserve the VS Code callback URI in the state parameter.",
@@ -83,7 +88,7 @@ export async function GET(request: NextRequest) {
             "No original redirect URI found in state parameter",
             400,
           );
-        }        // Detect client type based on redirect URI pattern with strict OAuth 2.1 validation
+        } // Detect client type based on redirect URI pattern with strict OAuth 2.1 validation
         if (originalRedirectUri.includes("oauth/callback")) {
           // MCP Remote (mcp-remote tool) and Claude Desktop both use /oauth/callback pattern
           clientType = "mcp-remote";
@@ -136,20 +141,27 @@ export async function GET(request: NextRequest) {
             console.log("Resource field:", parsedState.resource);
 
             if (parsedState.resource && !parsedState.originalRedirectUri) {
-              if (parsedState.resource.includes("localhost") || parsedState.resource.includes("127.0.0.1")) {
+              if (
+                parsedState.resource.includes("localhost") ||
+                parsedState.resource.includes("127.0.0.1")
+              ) {
                 console.log("Detected VS Code local MCP flow (legacy format)");
-                originalRedirectUri = "vscode://ms-vscode.vscode-mcp/oauth-callback";
+                originalRedirectUri =
+                  "vscode://ms-vscode.vscode-mcp/oauth-callback";
                 clientType = "vscode-local";
               } else {
                 console.log("Detected VS Code remote MCP flow (legacy format)");
-                originalRedirectUri = "vscode://ms-vscode.vscode-mcp/oauth-callback";
+                originalRedirectUri =
+                  "vscode://ms-vscode.vscode-mcp/oauth-callback";
                 clientType = "vscode-mcp";
               }
             }
           }
 
           if (!originalRedirectUri) {
-            console.error("❌ No originalRedirectUri found in legacy format state");
+            console.error(
+              "❌ No originalRedirectUri found in legacy format state",
+            );
             return createOAuth21ErrorResponse(
               "invalid_state",
               "No original redirect URI found in state parameter",

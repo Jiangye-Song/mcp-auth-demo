@@ -1,309 +1,309 @@
 {
-    "title": "OAuth 2.1 MCP Authentication Demo",
-    "subtitle": "A Model Context Protocol server with Google OAuth 2.1 authentication",
-    "description": "This project demonstrates how to build a secure MCP server that implements OAuth 2.1 authentication with Google, supporting both VS Code extensions and Claude Desktop integrations.",
-    "architecture": {
-        "title": "Architecture Overview",
-        "description": "This MCP server implements OAuth 2.1 authentication with Google, providing secure access to MCP tools through standardized authentication flows.",
-        "components": [
-            {
-                "name": "MCP Server Endpoint",
-                "path": "/api/mcp",
-                "description": "Main MCP protocol endpoint that handles tool calls with OAuth 2.1 authentication",
-                "features": [
-                    "Google ID token validation",
-                    "CORS support",
-                    "JSON-RPC 2.0 protocol"
-                ]
-            },
-            {
-                "name": "OAuth Authorization",
-                "path": "/api/auth/authorize",
-                "description": "OAuth 2.1 compliant authorization endpoint",
-                "features": [
-                    "Authorization Code Flow only",
-                    "PKCE support",
-                    "State validation"
-                ]
-            },
-            {
-                "name": "OAuth Token Exchange",
-                "path": "/api/auth/token",
-                "description": "Token exchange endpoint for authorization code flow",
-                "features": [
-                    "Client authentication",
-                    "Code validation",
-                    "Token generation"
-                ]
-            },
-            {
-                "name": "Authorization Server Metadata",
-                "path": "/.well-known/oauth-authorization-server",
-                "description": "RFC 8414 compliant metadata endpoint",
-                "features": [
-                    "OAuth 2.1 capabilities",
-                    "Endpoint discovery",
-                    "Security policies"
-                ]
-            },
-            {
-                "name": "Protected Resource Metadata",
-                "path": "/.well-known/oauth-protected-resource",
-                "description": "Resource server metadata for MCP clients",
-                "features": [
-                    "Token validation info",
-                    "Scope requirements",
-                    "Authentication methods"
-                ]
-            }
-        ]
-    },
-    "oauth21Compliance": {
-        "title": "OAuth 2.1 Compliance",
-        "description": "This server implements full OAuth 2.1 compliance with enhanced security features.",
+  "title": "OAuth 2.1 MCP Authentication Demo",
+  "subtitle": "A Model Context Protocol server with Google OAuth 2.1 authentication",
+  "description": "This project demonstrates how to build a secure MCP server that implements OAuth 2.1 authentication with Google, supporting both VS Code extensions and Claude Desktop integrations.",
+  "architecture": {
+    "title": "Architecture Overview",
+    "description": "This MCP server implements OAuth 2.1 authentication with Google, providing secure access to MCP tools through standardized authentication flows.",
+    "components": [
+      {
+        "name": "MCP Server Endpoint",
+        "path": "/api/mcp",
+        "description": "Main MCP protocol endpoint that handles tool calls with OAuth 2.1 authentication",
         "features": [
-            {
-                "name": "Authorization Code Flow Only",
-                "description": "No implicit flow or hash fragment patterns - query parameters only",
-                "status": "implemented"
-            },
-            {
-                "name": "PKCE Required",
-                "description": "Proof Key for Code Exchange for enhanced security",
-                "status": "implemented"
-            },
-            {
-                "name": "Strict Client Validation",
-                "description": "Unsupported clients receive proper OAuth 2.1 error responses",
-                "status": "implemented"
-            },
-            {
-                "name": "No Hash Fragments",
-                "description": "All authentication uses query parameters per OAuth 2.1 spec",
-                "status": "implemented"
-            }
+          "Google ID token validation",
+          "CORS support",
+          "JSON-RPC 2.0 protocol"
         ]
-    },
-    "tools": {
-        "title": "Available MCP Tools",
-        "description": "The server provides authenticated access to the following tools:",
-        "list": [
-            {
-                "name": "say_hello",
-                "description": "A simple greeting tool that demonstrates authenticated MCP calls",
-                "parameters": {
-                    "name": {
-                        "type": "string",
-                        "description": "Optional name to include in the greeting",
-                        "required": false
-                    }
-                },
-                "example": {
-                    "request": {
-                        "name": "say_hello",
-                        "arguments": {
-                            "name": "World"
-                        }
-                    },
-                    "response": "Hello, World! (Authenticated)"
-                }
-            }
+      },
+      {
+        "name": "OAuth Authorization",
+        "path": "/api/auth/authorize",
+        "description": "OAuth 2.1 compliant authorization endpoint",
+        "features": [
+          "Authorization Code Flow only",
+          "PKCE support",
+          "State validation"
         ]
-    },
-    "integrations": {
-        "vsCode": {
-            "title": "VS Code Integration",
-            "description": "Use this MCP server with VS Code extensions that support OAuth authentication.",
-            "steps": [
-                {
-                    "step": 1,
-                    "title": "Install MCP Extension",
-                    "description": "Install an MCP-compatible VS Code extension",
-                    "code": "# Search for MCP extensions in VS Code marketplace"
-                },
-                {
-                    "step": 2,
-                    "title": "Configure VS Code MCP",
-                    "description": "Create or update the .vscode/mcp.json file in your workspace with the actual working configuration",
-                    "code": "{\n  \"servers\": {\n    \"hello-mcp\": {\n      \"type\": \"http\",\n      \"url\": \"{{MCP_ENDPOINT}}\"\n    },\n    \"hello-mcp-local\": {\n      \"type\": \"http\",\n      \"url\": \"http://localhost:3000/api/mcp\"\n    }\n  }\n}"
-                },
-                {
-                    "step": 3,
-                    "title": "Start the Server",
-                    "description": "Run the development server",
-                    "code": "pnpm dev"
-                },
-                {
-                    "step": 4,
-                    "title": "Authenticate",
-                    "description": "VS Code will prompt for Google OAuth authentication when connecting"
-                }
-            ]
+      },
+      {
+        "name": "OAuth Token Exchange",
+        "path": "/api/auth/token",
+        "description": "Token exchange endpoint for authorization code flow",
+        "features": [
+          "Client authentication",
+          "Code validation",
+          "Token generation"
+        ]
+      },
+      {
+        "name": "Authorization Server Metadata",
+        "path": "/.well-known/oauth-authorization-server",
+        "description": "RFC 8414 compliant metadata endpoint",
+        "features": [
+          "OAuth 2.1 capabilities",
+          "Endpoint discovery",
+          "Security policies"
+        ]
+      },
+      {
+        "name": "Protected Resource Metadata",
+        "path": "/.well-known/oauth-protected-resource",
+        "description": "Resource server metadata for MCP clients",
+        "features": [
+          "Token validation info",
+          "Scope requirements",
+          "Authentication methods"
+        ]
+      }
+    ]
+  },
+  "oauth21Compliance": {
+    "title": "OAuth 2.1 Compliance",
+    "description": "This server implements full OAuth 2.1 compliance with enhanced security features.",
+    "features": [
+      {
+        "name": "Authorization Code Flow Only",
+        "description": "No implicit flow or hash fragment patterns - query parameters only",
+        "status": "implemented"
+      },
+      {
+        "name": "PKCE Required",
+        "description": "Proof Key for Code Exchange for enhanced security",
+        "status": "implemented"
+      },
+      {
+        "name": "Strict Client Validation",
+        "description": "Unsupported clients receive proper OAuth 2.1 error responses",
+        "status": "implemented"
+      },
+      {
+        "name": "No Hash Fragments",
+        "description": "All authentication uses query parameters per OAuth 2.1 spec",
+        "status": "implemented"
+      }
+    ]
+  },
+  "tools": {
+    "title": "Available MCP Tools",
+    "description": "The server provides authenticated access to the following tools:",
+    "list": [
+      {
+        "name": "say_hello",
+        "description": "A simple greeting tool that demonstrates authenticated MCP calls",
+        "parameters": {
+          "name": {
+            "type": "string",
+            "description": "Optional name to include in the greeting",
+            "required": false
+          }
         },
-        "claudeDesktop": {
-            "title": "Claude Desktop Integration",
-            "description": "Use this MCP server with Claude Desktop using npx for remote MCP connections.",
-            "configFile": "~/.claude/claude_desktop_config.json",
-            "steps": [
-                {
-                    "step": 1,
-                    "title": "Start the Server",
-                    "description": "Run the MCP server locally",
-                    "code": "pnpm dev"
-                },
-                {
-                    "step": 2,
-                    "title": "Configure Claude Desktop",
-                    "description": "Add the MCP server to Claude Desktop configuration. Note: This server requires authentication, so Claude Desktop will prompt for OAuth authentication.",
-                    "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"{{MCP_ENDPOINT}}\"\n      ]\n    }\n  }\n}"
-                },
-                {
-                    "step": 3,
-                    "title": "Restart Claude Desktop",
-                    "description": "Restart Claude Desktop to load the new MCP server configuration"
-                },
-                {
-                    "step": 4,
-                    "title": "Authenticate",
-                    "description": "Claude Desktop will handle OAuth authentication automatically using your browser"
-                },
-                {
-                    "step": 5,
-                    "title": "Test the Connection",
-                    "description": "Once authenticated, you can call the hello tool. Example output:",
-                    "code": "👋 Hello, [Your Name]! (authenticated as [Your Email]) This is an authenticated MCP tool!"
-                }
-            ]
+        "example": {
+          "request": {
+            "name": "say_hello",
+            "arguments": {
+              "name": "World"
+            }
+          },
+          "response": "Hello, World! (Authenticated)"
         }
+      }
+    ]
+  },
+  "integrations": {
+    "vsCode": {
+      "title": "VS Code Integration",
+      "description": "Use this MCP server with VS Code extensions that support OAuth authentication.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Install MCP Extension",
+          "description": "Install an MCP-compatible VS Code extension",
+          "code": "# Search for MCP extensions in VS Code marketplace"
+        },
+        {
+          "step": 2,
+          "title": "Configure VS Code MCP",
+          "description": "Create or update the .vscode/mcp.json file in your workspace with the actual working configuration",
+          "code": "{\n  \"servers\": {\n    \"hello-mcp\": {\n      \"type\": \"http\",\n      \"url\": \"{{MCP_ENDPOINT}}\"\n    },\n    \"hello-mcp-local\": {\n      \"type\": \"http\",\n      \"url\": \"http://localhost:3000/api/mcp\"\n    }\n  }\n}"
+        },
+        {
+          "step": 3,
+          "title": "Start the Server",
+          "description": "Run the development server",
+          "code": "pnpm dev"
+        },
+        {
+          "step": 4,
+          "title": "Authenticate",
+          "description": "VS Code will prompt for Google OAuth authentication when connecting"
+        }
+      ]
     },
-    "testing": {
-        "title": "Testing the Server",
-        "description": "Various ways to test the MCP server functionality",
-        "methods": [
-            {
-                "name": "Web Interface",
-                "description": "Use this page to test server functionality with a web interface",
-                "url": "{{API_DOMAIN}}"
-            },
-            {
-                "name": "Direct MCP Calls",
-                "description": "Make direct HTTP requests to the MCP endpoint",
-                "example": {
-                    "url": "{{MCP_ENDPOINT}}",
-                    "method": "POST",
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer YOUR_GOOGLE_ID_TOKEN"
-                    },
-                    "body": {
-                        "jsonrpc": "2.0",
-                        "method": "tools/call",
-                        "params": {
-                            "name": "say_hello",
-                            "arguments": {
-                                "name": "Test"
-                            }
-                        },
-                        "id": 1
-                    }
-                }
-            },
-            {
-                "name": "OAuth Playground",
-                "description": "Test OAuth flow using Google's OAuth 2.0 Playground",
-                "url": "https://developers.google.com/oauthplayground"
-            }
-        ]
-    },
-    "endpoints": {
-        "title": "API Endpoints",
-        "list": [
-            {
-                "path": "/api/mcp",
-                "method": "POST",
-                "description": "Main MCP protocol endpoint",
-                "authentication": "Required (Google ID token)",
-                "cors": "Enabled"
-            },
-            {
-                "path": "/api/auth/authorize",
-                "method": "GET",
-                "description": "OAuth 2.1 authorization endpoint",
-                "authentication": "None",
-                "cors": "Enabled"
-            },
-            {
-                "path": "/api/auth/token",
-                "method": "POST",
-                "description": "OAuth token exchange endpoint",
-                "authentication": "Client credentials",
-                "cors": "Enabled"
-            },
-            {
-                "path": "/.well-known/oauth-authorization-server",
-                "method": "GET",
-                "description": "Authorization server metadata (RFC 8414)",
-                "authentication": "None",
-                "cors": "Enabled"
-            },
-            {
-                "path": "/.well-known/oauth-protected-resource",
-                "method": "GET",
-                "description": "Protected resource metadata",
-                "authentication": "None",
-                "cors": "Enabled"
-            }
-        ]
-    },
-    "security": {
-        "title": "Security Features",
-        "description": "This server implements multiple security layers for OAuth 2.1 compliance.",
-        "features": [
-            {
-                "name": "Google ID Token Validation",
-                "description": "All MCP requests must include valid Google ID tokens",
-                "implementation": "JWT signature verification with Google's public keys"
-            },
-            {
-                "name": "CORS Protection",
-                "description": "Configurable CORS headers for cross-origin requests",
-                "implementation": "Whitelist-based origin validation"
-            },
-            {
-                "name": "State Validation",
-                "description": "OAuth state parameter validation to prevent CSRF attacks",
-                "implementation": "Cryptographically secure random state generation"
-            },
-            {
-                "name": "PKCE Implementation",
-                "description": "Proof Key for Code Exchange for public clients",
-                "implementation": "SHA256 code challenge/verifier validation"
-            }
-        ]
-    },
-    "troubleshooting": {
-        "title": "Common Issues",
-        "issues": [
-            {
-                "problem": "401 Unauthorized responses",
-                "cause": "Missing or invalid Google ID token",
-                "solution": "Ensure you're sending a valid Google ID token in the Authorization header"
-            },
-            {
-                "problem": "CORS errors in browser",
-                "cause": "Cross-origin request blocked",
-                "solution": "The server includes CORS headers, but ensure your origin is allowed"
-            },
-            {
-                "problem": "OAuth flow fails",
-                "cause": "Invalid redirect URI or client configuration",
-                "solution": "Check Google OAuth client configuration and redirect URIs"
-            },
-            {
-                "problem": "MCP connection fails in Claude Desktop",
-                "cause": "Incorrect npx configuration or server not running",
-                "solution": "Verify the server is running on {{SERVER_HOST}} and npx mcp-remote is installed"
-            }
-        ]
+    "claudeDesktop": {
+      "title": "Claude Desktop Integration",
+      "description": "Use this MCP server with Claude Desktop using npx for remote MCP connections.",
+      "configFile": "~/.claude/claude_desktop_config.json",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Start the Server",
+          "description": "Run the MCP server locally",
+          "code": "pnpm dev"
+        },
+        {
+          "step": 2,
+          "title": "Configure Claude Desktop",
+          "description": "Add the MCP server to Claude Desktop configuration. Note: This server requires authentication, so Claude Desktop will prompt for OAuth authentication.",
+          "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"{{MCP_ENDPOINT}}\"\n      ]\n    }\n  }\n}"
+        },
+        {
+          "step": 3,
+          "title": "Restart Claude Desktop",
+          "description": "Restart Claude Desktop to load the new MCP server configuration"
+        },
+        {
+          "step": 4,
+          "title": "Authenticate",
+          "description": "Claude Desktop will handle OAuth authentication automatically using your browser"
+        },
+        {
+          "step": 5,
+          "title": "Test the Connection",
+          "description": "Once authenticated, you can call the hello tool. Example output:",
+          "code": "👋 Hello, [Your Name]! (authenticated as [Your Email]) This is an authenticated MCP tool!"
+        }
+      ]
     }
+  },
+  "testing": {
+    "title": "Testing the Server",
+    "description": "Various ways to test the MCP server functionality",
+    "methods": [
+      {
+        "name": "Web Interface",
+        "description": "Use this page to test server functionality with a web interface",
+        "url": "{{API_DOMAIN}}"
+      },
+      {
+        "name": "Direct MCP Calls",
+        "description": "Make direct HTTP requests to the MCP endpoint",
+        "example": {
+          "url": "{{MCP_ENDPOINT}}",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer YOUR_GOOGLE_ID_TOKEN"
+          },
+          "body": {
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+              "name": "say_hello",
+              "arguments": {
+                "name": "Test"
+              }
+            },
+            "id": 1
+          }
+        }
+      },
+      {
+        "name": "OAuth Playground",
+        "description": "Test OAuth flow using Google's OAuth 2.0 Playground",
+        "url": "https://developers.google.com/oauthplayground"
+      }
+    ]
+  },
+  "endpoints": {
+    "title": "API Endpoints",
+    "list": [
+      {
+        "path": "/api/mcp",
+        "method": "POST",
+        "description": "Main MCP protocol endpoint",
+        "authentication": "Required (Google ID token)",
+        "cors": "Enabled"
+      },
+      {
+        "path": "/api/auth/authorize",
+        "method": "GET",
+        "description": "OAuth 2.1 authorization endpoint",
+        "authentication": "None",
+        "cors": "Enabled"
+      },
+      {
+        "path": "/api/auth/token",
+        "method": "POST",
+        "description": "OAuth token exchange endpoint",
+        "authentication": "Client credentials",
+        "cors": "Enabled"
+      },
+      {
+        "path": "/.well-known/oauth-authorization-server",
+        "method": "GET",
+        "description": "Authorization server metadata (RFC 8414)",
+        "authentication": "None",
+        "cors": "Enabled"
+      },
+      {
+        "path": "/.well-known/oauth-protected-resource",
+        "method": "GET",
+        "description": "Protected resource metadata",
+        "authentication": "None",
+        "cors": "Enabled"
+      }
+    ]
+  },
+  "security": {
+    "title": "Security Features",
+    "description": "This server implements multiple security layers for OAuth 2.1 compliance.",
+    "features": [
+      {
+        "name": "Google ID Token Validation",
+        "description": "All MCP requests must include valid Google ID tokens",
+        "implementation": "JWT signature verification with Google's public keys"
+      },
+      {
+        "name": "CORS Protection",
+        "description": "Configurable CORS headers for cross-origin requests",
+        "implementation": "Whitelist-based origin validation"
+      },
+      {
+        "name": "State Validation",
+        "description": "OAuth state parameter validation to prevent CSRF attacks",
+        "implementation": "Cryptographically secure random state generation"
+      },
+      {
+        "name": "PKCE Implementation",
+        "description": "Proof Key for Code Exchange for public clients",
+        "implementation": "SHA256 code challenge/verifier validation"
+      }
+    ]
+  },
+  "troubleshooting": {
+    "title": "Common Issues",
+    "issues": [
+      {
+        "problem": "401 Unauthorized responses",
+        "cause": "Missing or invalid Google ID token",
+        "solution": "Ensure you're sending a valid Google ID token in the Authorization header"
+      },
+      {
+        "problem": "CORS errors in browser",
+        "cause": "Cross-origin request blocked",
+        "solution": "The server includes CORS headers, but ensure your origin is allowed"
+      },
+      {
+        "problem": "OAuth flow fails",
+        "cause": "Invalid redirect URI or client configuration",
+        "solution": "Check Google OAuth client configuration and redirect URIs"
+      },
+      {
+        "problem": "MCP connection fails in Claude Desktop",
+        "cause": "Incorrect npx configuration or server not running",
+        "solution": "Verify the server is running on {{SERVER_HOST}} and npx mcp-remote is installed"
+      }
+    ]
+  }
 }
