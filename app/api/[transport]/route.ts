@@ -6,11 +6,48 @@ import { NextRequest, NextResponse } from "next/server";
 
 console.log('🚀 Initializing MCP OAuth 2.1 Server (Specification 2025-06-18)');
 
+// Store auth context for current request
+let currentAuthInfo: any = null;
+
+// Create auth-aware tool wrapper
+function createAuthenticatedTool(toolFunction: any) {
+  return async (args: any, extra?: any) => {
+    // Extract auth info from the request headers if currentAuthInfo is not available
+    let authInfo = currentAuthInfo;
+
+    if (!authInfo && extra?.requestInfo?.headers?.authorization) {
+      const authHeader = extra.requestInfo.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        try {
+          // Create a mock request object for verifyGoogleToken
+          const mockRequest = {
+            headers: new Map([['authorization', authHeader]]),
+            url: 'http://localhost:3000/api/mcp',
+            method: 'POST'
+          };
+          authInfo = await verifyGoogleToken(mockRequest as any, token);
+        } catch (error) {
+          console.log('Auth extraction failed:', error);
+        }
+      }
+    }
+
+    // Inject the auth info into the tool call
+    const enhancedExtra = {
+      ...extra,
+      authInfo: authInfo
+    };
+    return toolFunction(args, enhancedExtra);
+  };
+}
+
 // Create the base MCP handler
 const baseHandler = createMcpHandler(
   (server) => {
     console.log('📋 Registering MCP tools with OAuth 2.1 authentication');
-    server.tool(helloTool.name, helloTool.description, helloTool.inputSchema, sayHello);
+    // Register tools with auth context injection
+    server.tool(helloTool.name, helloTool.description, helloTool.inputSchema, createAuthenticatedTool(sayHello));
   },
   {
     serverInfo: {
@@ -98,8 +135,16 @@ async function mcpAuthHandler(request: NextRequest) {
       provider: authInfo.extra?.provider || 'unknown'
     });
 
+    // Store auth info for tools to access
+    currentAuthInfo = authInfo;
+
     // Token is valid, proceed to MCP handler
-    return baseHandler(request);
+    const response = await baseHandler(request);
+
+    // Clear auth info after request
+    currentAuthInfo = null;
+
+    return response;
 
   } catch (error) {
     console.error('💥 Token verification error:', error);
