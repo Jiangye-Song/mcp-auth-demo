@@ -1,22 +1,26 @@
 # MCP Hello Demo with Google OAuth
 
-A Model Context Protocol (MCP) server built with **Next.js 15** and **mcp-handler**, featuring **Google OAuth 2.0 authentication**.
+A Model Context Protocol (MCP) server built with **Next.js 15** and **mcp-handler**, featuring **Google OAuth 2.1 authentication**.
 
-## 🎯 Status: WORKING ✅
+## 🎯 Status: PRODUCTION READY ✅
 
 This project successfully implements:
-- ✅ **Google OAuth Authentication** - Full OAuth 2.0 flow with dual token support
+- ✅ **Google OAuth 2.1 Authentication** - Full OAuth 2.1 flow with PKCE support
 - ✅ **VS Code MCP Integration** - Seamless authentication with VS Code
+- ✅ **MCP Remote Support** - Compatible with `npx mcp-remote` tool
 - ✅ **RFC 9728 Compliance** - OAuth Protected Resource Metadata standard
-- ✅ **Dual Token Verification** - Handles both Google ID tokens and access tokens
+- ✅ **Dual Client Support** - Works with both VS Code and MCP Remote clients
 
-## 🔧 The Key Breakthrough
+## 🔧 Key Features
 
-**Problem**: VS Code was sending Google **access tokens** instead of **ID tokens**.
+**OAuth 2.1 Compliance**: Modern OAuth implementation with:
+- **PKCE (Proof Key for Code Exchange)** - Enhanced security for public clients
+- **Authorization Code Flow** - Secure token exchange
+- **Auto-discovery Endpoints** - RFC-compliant `.well-known` metadata
 
-**Solution**: Implemented **dual token verification** that automatically detects and handles both token types:
-- **Google ID Tokens** (JWTs) → Verified with `google-auth-library`
-- **Google Access Tokens** → Verified with Google UserInfo API
+**Dual Client Support**: Works seamlessly with:
+- **VS Code MCP Extension** - Interactive authentication with browser OAuth flow
+- **MCP Remote Tool** - Command-line MCP client with automated OAuth handling
 
 ## 🚀 Quick Start
 
@@ -55,21 +59,33 @@ This project successfully implements:
    }
    ```
 
-2. **Restart VS Code** - MCP server will auto-start with OAuth authentication
+2. **Start MCP Server** - In VS Code, click the **Start** button for the MCP server. VS Code will prompt you to complete OAuth verification in your browser.
+
+### MCP Remote Testing
+```bash
+# Test with mcp-remote (automatically handles OAuth flow)
+npx mcp-remote http://localhost:3000/api/mcp
+```
+This will open your browser for Google OAuth authentication, then establish the MCP connection.
 
 ## 🏗️ Architecture
 
 ### Core Components
-- **`app/api/[transport]/route.ts`** - Main MCP endpoint with OAuth authentication
-- **`lib/auth.ts`** - Dual token verification (ID tokens + access tokens)
-- **`app/.well-known/oauth-protected-resource/route.ts`** - RFC 9728 metadata endpoint
+- **`app/api/[transport]/route.ts`** - Main MCP endpoint with OAuth 2.1 authentication
+- **`lib/auth.ts`** - Google OAuth token verification
+- **`app/.well-known/oauth-authorization-server/route.ts`** - OAuth 2.1 authorization server metadata
+- **`app/.well-known/oauth-protected-resource/route.ts`** - OAuth 2.1 protected resource metadata
+- **`app/api/auth/authorize/route.ts`** - OAuth 2.1 authorization endpoint
+- **`app/api/auth/token/route.ts`** - OAuth 2.1 token endpoint
+- **`app/oauth/callback/route.ts`** - OAuth callback for MCP Remote clients
 - **`lib/hello.ts`** - Authenticated MCP tool implementation
 
 ### Authentication Flow
-1. **OAuth Metadata Discovery** - VS Code fetches `/.well-known/oauth-protected-resource`
-2. **Google OAuth** - User authenticates via Google OAuth 2.0
-3. **Token Verification** - Server verifies both ID tokens and access tokens
-4. **Authenticated MCP Calls** - Tools execute with user context
+1. **OAuth Discovery** - Clients fetch `.well-known` metadata endpoints
+2. **Authorization Request** - Redirect to `/api/auth/authorize` with PKCE
+3. **Google OAuth** - User authenticates via Google OAuth 2.0
+4. **Token Exchange** - Authorization code exchanged for tokens at `/api/auth/token`
+5. **Authenticated MCP Calls** - Tools execute with verified user context
 
 ## 🛠️ Available Tools
 
@@ -112,46 +128,66 @@ Greets users with authentication context.
 - **`zod`** - Schema validation for tool parameters
 
 ### Security Features
-- ✅ **Token Verification** - Both Google ID tokens and access tokens
+- ✅ **OAuth 2.1 Compliance** - Modern OAuth with PKCE and strict security
+- ✅ **Google ID Token Verification** - Cryptographic token validation
 - ✅ **User Context** - Tools receive authenticated user information
 - ✅ **Error Handling** - Proper 401/403 responses with WWW-Authenticate headers
-- ✅ **Scope Validation** - Configurable OAuth scope requirements
+- ✅ **Multi-Client Support** - Works with VS Code and MCP Remote
 - ✅ **Stateless** - No session storage, tokens verified per request
 
 ### Google Cloud Console Setup
 **OAuth 2.0 Configuration**:
-- **Authorized Redirect URIs**: `http://localhost:3000/api/auth/callback/google`
+- **Authorized Redirect URIs**: 
+  - `http://localhost:3000/api/auth/callback/google`
+  - `http://localhost:3000/oauth/callback`
 - **Authorized JavaScript Origins**: `http://localhost:3000`
 - **Application Type**: Web application
 
 ## 🧪 Testing
 
-### Manual Testing
+### Manual Testing with MCP Remote
 ```bash
-# Test authentication with real Google token
+# Test with mcp-remote (handles full OAuth flow automatically)
+npx mcp-remote http://localhost:3000/api/mcp
+
+# This will:
+# 1. Open browser for Google OAuth authentication
+# 2. Complete OAuth 2.1 flow with PKCE
+# 3. Establish authenticated MCP connection
+# 4. Allow you to call tools interactively
+```
+
+### Manual HTTP Testing (requires valid Google ID token)
+```bash
+# Test authentication with real Google ID token
 curl -X POST http://localhost:3000/api/mcp \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ya29.a0AS3H6N..." \
+  -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6..." \
   -d '{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"say_hello","arguments":{"name":"Test"}}}'
 ```
 
 ### Expected Success Log
 ```
-Access token verified successfully for user: songjiangye2021@gmail.com
+✅ Google ID token verified successfully
+User info: {
+  clientId: '228760319328-g2tmjubea6q0ftpuuuab6p23647eht53.apps.googleusercontent.com',
+  scopes: ['openid', 'email', 'profile'],
+  email: 'user@gmail.com',
+  provider: 'google'
+}
 ```
 
 ## 📖 Documentation
 
-- **[OAuth Implementation Plan](./OAUTH_IMPLEMENTATION_PLAN.md)** - Complete implementation guide
-- **[Agent Instructions](./agents.md)** - Development patterns and architecture
+- **[Agent Instructions](./agents.md)** - Development patterns and architecture guidelines
 
 ## 🎯 Key Learnings
 
-1. **Flexible Token Handling** - Support multiple Google OAuth token types
-2. **Google UserInfo API** - Reliable verification for access tokens
-3. **RFC 9728 Compliance** - Essential for MCP client compatibility
-4. **Real-world Testing** - VS Code behavior differs from curl testing
-5. **Robust Error Handling** - Clear debugging and graceful failures
+1. **OAuth 2.1 + PKCE** - Enhanced security for MCP client authentication
+2. **Dual Client Support** - Single server works with VS Code and MCP Remote
+3. **Auto-discovery** - RFC-compliant `.well-known` endpoints for client detection
+4. **User-initiated Flow** - VS Code requires clicking Start button, not auto-restart
+5. **Production Architecture** - Stateless, scalable OAuth 2.1 implementation
 
 ## 🚀 Production Deployment
 
