@@ -150,13 +150,13 @@
           "step": 1,
           "title": "Choose Your Deployment",
           "description": "You can use either the local development server or the live Vercel deployment",
-          "code": "# Local development (recommended for development)\npnpm dev\n\n# OR use the live deployment:\n# https://mcp-auth-demo-rust.vercel.app/api/mcp"
+          "code": "# Local development\npnpm dev\n\n# OR use the live deployment:\n# https://mcp-auth-demo-rust.vercel.app/api/mcp"
         },
         {
           "step": 2,
           "title": "Configure Claude Desktop",
           "description": "Add the MCP server to Claude Desktop configuration. Works with both local and remote endpoints!",
-          "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world-local\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"http://localhost:3000/api/mcp\"\n      ]\n    },\n    \"auth-hello-world-remote\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"https://mcp-auth-demo-rust.vercel.app/api/mcp\"\n      ]\n    }\n  }\n}"
+          "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world-local\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"http://localhost:3000/api/mcp\",\n        \"59908\"\n      ]\n    },\n    \"auth-hello-world-remote\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"https://mcp-auth-demo-rust.vercel.app/api/mcp\",\n        \"59908\"\n      ]\n    }\n  }\n}"
         },
         {
           "step": 3,
