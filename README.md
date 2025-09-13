@@ -13,15 +13,20 @@ A production-ready **Model Context Protocol (MCP)** server with **OAuth 2.1 auth
 - ✅ **Security First** - No token exposure in URLs, proper error handling
 - ✅ **Standards Compliant** - RFC 9728 OAuth Protected Resource Metadata
 
-## 🎉 Recent Achievement: mcp-remote Compatibility Resolved
+## 📋 Important Notice: mcp-remote Compatibility
 
-**Problem Solved**: Initially, this server had compatibility issues with `mcp-remote` for repeated connections on remote deployments (Vercel). The issue was identified as an architectural limitation in `mcp-remote`'s port detection mechanism.
-
-**Solution Implemented**: Added intelligent redirect URI management in the OAuth client registration endpoint that includes **both**:
-- Server-domain URIs (for OAuth 2.1 compliance)  
-- Client localhost URIs (for mcp-remote compatibility)
-
-**Result**: ✅ **Full compatibility achieved** - works seamlessly for both local development and remote deployments without any user intervention or cache clearing.
+> **💡 TIP**: When using `mcp-remote` with remote servers, specify a unique port number (e.g., 59908) to avoid conflicts with other MCP servers. This server has been designed to handle both local and remote OAuth flows seamlessly.
+>
+> **Technical Background**: This server resolves an architectural limitation in `mcp-remote`'s port detection by implementing intelligent redirect URI management that supports both OAuth 2.1 compliance and client compatibility requirements.
+>
+> **Usage Examples**:
+> ```bash
+> # Local development (no port needed)
+> npx mcp-remote http://localhost:3000/api/mcp
+> 
+> # Remote server (specify unique port)
+> npx mcp-remote https://your-server.vercel.app/api/mcp 59908
+> ```
 
 See detailed analysis: [mcp-remote Port Detection Issue Analysis](./docs/mcp-remote-port-detection-issue.md)
 
