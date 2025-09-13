@@ -156,7 +156,8 @@
           "step": 2,
           "title": "Configure Claude Desktop",
           "description": "Add the MCP server to Claude Desktop configuration. Works with both local and remote endpoints!",
-          "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world-local\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"http://localhost:3000/api/mcp\",\n        \"59908\"\n      ]\n    },\n    \"auth-hello-world-remote\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"https://mcp-auth-demo-rust.vercel.app/api/mcp\",\n        \"59908\"\n      ]\n    }\n  }\n}"
+          "notice": "⚠️ PORT CONFIGURATION: For remote deployments, specify a unique port number (like 59908) to avoid conflicts with other MCP servers. For local development, the port parameter is optional. If developing multiple MCP apps, use different port numbers for each (e.g., 59908, 59909, 59910).",
+          "code": "{\n  \"mcpServers\": {\n    \"auth-hello-world-local\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"http://localhost:3000/api/mcp\"\n      ]\n    },\n    \"auth-hello-world-remote\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"mcp-remote\",\n        \"https://mcp-auth-demo-rust.vercel.app/api/mcp\",\n        \"59908\"\n      ]\n    }\n  }\n}"
         },
         {
           "step": 3,
