@@ -331,10 +331,10 @@
         "solution": "Verify the server is running on {{SERVER_HOST}} and npx mcp-remote is installed"
       },
       {
-          "problem": "Claude Desktop authentication issues (RESOLVED)",
-          "cause": "Previous versions had mcp-remote compatibility issues",
-          "solution": "✅ FIXED: Server now includes both server and localhost redirect URIs for full mcp-remote compatibility. Works seamlessly for both local and remote deployments."
-        }
+        "problem": "Claude Desktop authentication issues (RESOLVED)",
+        "cause": "Previous versions had mcp-remote compatibility issues",
+        "solution": "✅ FIXED: Server now includes both server and localhost redirect URIs for full mcp-remote compatibility. Works seamlessly for both local and remote deployments."
+      }
     ]
   }
 }

@@ -31,8 +31,8 @@ export async function POST(req: Request) {
     // This allows mcp-remote to find the localhost URI it expects while we still proxy through our server
     const allRedirectUris = [
       ...baseRedirectUris, // Our production server's callback URIs (registered in Google)
-      ...clientRedirectUris.filter((uri: string) => 
-        uri.includes('localhost') || uri.includes('127.0.0.1')
+      ...clientRedirectUris.filter(
+        (uri: string) => uri.includes("localhost") || uri.includes("127.0.0.1"),
       ), // Include client's localhost URIs for mcp-remote compatibility
     ];
 
