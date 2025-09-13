@@ -304,6 +304,11 @@
         "problem": "MCP connection fails in Claude Desktop",
         "cause": "Incorrect npx configuration or server not running",
         "solution": "Verify the server is running on {{SERVER_HOST}} and npx mcp-remote is installed"
+      },
+      {
+        "problem": "Claude Desktop works first time but fails on subsequent launches",
+        "cause": "mcp-remote caches expired OAuth tokens and callback ports",
+        "solution": "Clear mcp-remote cache by deleting authentication files, or restart Claude Desktop completely. This is a known limitation of mcp-remote's authentication caching."
       }
     ]
   }
