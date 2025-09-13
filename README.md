@@ -9,9 +9,21 @@ A production-ready **Model Context Protocol (MCP)** server with **OAuth 2.1 auth
 ### Key Features
 - ✅ **OAuth 2.1 Authentication** - Secure Google OAuth with PKCE support
 - ✅ **VS Code Integration** - Seamless MCP authentication in VS Code
-- ✅ **MCP Remote Support** - Compatible with command-line MCP tools
+- ✅ **MCP Remote Support** - Full compatibility with mcp-remote for both local and remote servers
 - ✅ **Security First** - No token exposure in URLs, proper error handling
 - ✅ **Standards Compliant** - RFC 9728 OAuth Protected Resource Metadata
+
+## 🎉 Recent Achievement: mcp-remote Compatibility Resolved
+
+**Problem Solved**: Initially, this server had compatibility issues with `mcp-remote` for repeated connections on remote deployments (Vercel). The issue was identified as an architectural limitation in `mcp-remote`'s port detection mechanism.
+
+**Solution Implemented**: Added intelligent redirect URI management in the OAuth client registration endpoint that includes **both**:
+- Server-domain URIs (for OAuth 2.1 compliance)  
+- Client localhost URIs (for mcp-remote compatibility)
+
+**Result**: ✅ **Full compatibility achieved** - works seamlessly for both local development and remote deployments without any user intervention or cache clearing.
+
+See detailed analysis: [mcp-remote Port Detection Issue Analysis](./docs/mcp-remote-port-detection-issue.md)
 
 ## 🚀 Quick Start
 
@@ -61,6 +73,9 @@ pnpm dev
 ```bash
 # Test with mcp-remote (handles OAuth automatically)
 npx mcp-remote http://localhost:3000/api/mcp
+
+# Works with remote servers too! (including Vercel deployments)
+npx mcp-remote https://mcp-auth-demo-rust.vercel.app/api/mcp
 ```
 
 ## 📁 Project Structure
@@ -94,7 +109,7 @@ Google OAuth callback handler with client type detection:
 - MCP Remote (oauth/callback pattern)
 
 #### **`app/api/auth/register/route.ts`**
-OAuth 2.0 Dynamic Client Registration endpoint (RFC 7591) for MCP client auto-discovery.
+OAuth 2.0 Dynamic Client Registration endpoint (RFC 7591) with **mcp-remote compatibility fix**. Includes both server-domain and localhost redirect URIs to support mcp-remote's port detection mechanism while maintaining OAuth 2.1 compliance.
 
 ### OAuth Discovery Endpoints
 
