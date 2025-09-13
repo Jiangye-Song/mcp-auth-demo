@@ -309,6 +309,11 @@
         "problem": "Claude Desktop works first time but fails on subsequent launches",
         "cause": "mcp-remote caches expired OAuth tokens and callback ports",
         "solution": "Clear mcp-remote cache by deleting authentication files, or restart Claude Desktop completely. This is a known limitation of mcp-remote's authentication caching."
+      },
+      {
+        "problem": "Vercel deployment fails on second mcp-remote connection",
+        "cause": "mcp-remote cannot resolve cached localhost callback URIs for remote servers",
+        "solution": "Use localhost development server (http://localhost:3000/api/mcp) for reliable mcp-remote connections. Vercel works for first-time auth but has caching issues on subsequent attempts."
       }
     ]
   }

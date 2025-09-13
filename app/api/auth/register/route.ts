@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const registrationRequest = await req.json();
 
     // Use the redirect URIs provided by the client, with fallbacks
-    const _clientRedirectUris = registrationRequest.redirect_uris || [];
+    const clientRedirectUris = registrationRequest.redirect_uris || [];
 
     // Get the base URL using url-resolver
     const baseUrl = resolveApiDomain();
@@ -26,13 +26,14 @@ export async function POST(req: Request) {
       `${baseUrl}/oauth/callback`,
     ];
 
-    // For Google OAuth, we can ONLY use pre-registered redirect URIs
-    // We cannot use dynamic localhost ports that mcp-remote generates
-    // Instead, we'll use our production server as a proxy
+    // **FIX FOR MCP-REMOTE COMPATIBILITY**
+    // Include both server URIs (for Google OAuth) AND client localhost URIs (for mcp-remote port detection)
+    // This allows mcp-remote to find the localhost URI it expects while we still proxy through our server
     const allRedirectUris = [
-      ...baseRedirectUris, // Our production server's callback URIs (these are registered in Google)
-      // Note: We removed localhost URLs because Google OAuth requires pre-registered redirect URIs
-      // Our server will act as a proxy to forward codes back to mcp-remote's localhost
+      ...baseRedirectUris, // Our production server's callback URIs (registered in Google)
+      ...clientRedirectUris.filter((uri: string) => 
+        uri.includes('localhost') || uri.includes('127.0.0.1')
+      ), // Include client's localhost URIs for mcp-remote compatibility
     ];
 
     // For MCP clients, we return our pre-configured Google OAuth client
