@@ -105,7 +105,7 @@
               "name": "World"
             }
           },
-          "response": "Hello, World! (Authenticated)"
+          "response": "👋 Hello, World! (authenticated as [Your Email]) This is an authenticated MCP tool!"
         }
       }
     ]
@@ -143,6 +143,7 @@
     "claudeDesktop": {
       "title": "Claude Desktop Integration",
       "description": "Use this MCP server with Claude Desktop using npx for remote MCP connections.",
+      "notice": "⚠️ Please try updating your Claude Desktop App to the latest version before integrating if you encounter connection issues.",
       "configFile": "~/.claude/claude_desktop_config.json",
       "steps": [
         {
